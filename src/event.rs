@@ -1,4 +1,6 @@
-use color_eyre::eyre::WrapErr;
+use crate::app::AppEvent;
+
+use color_eyre::{Result, eyre::WrapErr};
 use crossterm::event::{self, Event as CrosstermEvent};
 use std::{
     sync::mpsc,
@@ -6,39 +8,18 @@ use std::{
     time::{Duration, Instant},
 };
 
-/// The frequency at which tick events are emitted.
+/// Frequency at which tick events are emitted.
 const TICK_FPS: f64 = 30.0;
 
 /// Representation of all possible events.
 #[derive(Clone, Debug)]
 pub enum Event {
-    /// An event that is emitted on a regular schedule.
-    ///
-    /// Use this event to run any code which has to run outside of being a direct response to a user
-    /// event. e.g. polling exernal systems, updating animations, or rendering the UI based on a
-    /// fixed frame rate.
+    /// Event emitted on a regular schedule.
     Tick,
-    /// Crossterm events.
-    ///
-    /// These events are emitted by the terminal.
+    /// Crossterm event emitted by the terminal.
     Crossterm(CrosstermEvent),
     /// Application events.
-    ///
-    /// Use this event to emit custom events that are specific to your application.
     App(AppEvent),
-}
-
-/// Application events.
-///
-/// You can extend this enum with your own custom events.
-#[derive(Clone, Debug)]
-pub enum AppEvent {
-    /// Increment the counter.
-    Increment,
-    /// Decrement the counter.
-    Decrement,
-    /// Quit the application.
-    Quit,
 }
 
 /// Terminal event handler.
@@ -68,7 +49,7 @@ impl EventHandler {
     /// This function returns an error if the sender channel is disconnected. This can happen if an
     /// error occurs in the event thread. In practice, this should not happen unless there is a
     /// problem with the underlying terminal.
-    pub fn next(&self) -> color_eyre::Result<Event> {
+    pub fn next(&self) -> Result<Event> {
         Ok(self.receiver.recv()?)
     }
 
@@ -77,8 +58,6 @@ impl EventHandler {
     /// This is useful for sending events to the event handler which will be processed by the next
     /// iteration of the application's event loop.
     pub fn send(&mut self, app_event: AppEvent) {
-        // Ignore the result as the reciever cannot be dropped while this struct still has a
-        // reference to it
         let _ = self.sender.send(Event::App(app_event));
     }
 }
@@ -98,17 +77,17 @@ impl EventThread {
     /// Runs the event thread.
     ///
     /// This function emits tick events at a fixed rate and polls for crossterm events in between.
-    fn run(self) -> color_eyre::Result<()> {
+    fn run(self) -> Result<()> {
         let tick_interval = Duration::from_secs_f64(1.0 / TICK_FPS);
         let mut last_tick = Instant::now();
         loop {
-            // emit tick events at a fixed rate
+            // Emit tick events at a fixed rate
             let timeout = tick_interval.saturating_sub(last_tick.elapsed());
             if timeout == Duration::ZERO {
                 last_tick = Instant::now();
                 self.send(Event::Tick);
             }
-            // poll for crossterm events, ensuring that we don't block the tick interval
+            // Poll for crossterm events, ensuring that we don't block the tick interval
             if event::poll(timeout).wrap_err("failed to poll for crossterm events")? {
                 let event = event::read().wrap_err("failed to read crossterm event")?;
                 self.send(Event::Crossterm(event));
@@ -118,8 +97,6 @@ impl EventThread {
 
     /// Sends an event to the receiver.
     fn send(&self, event: Event) {
-        // Ignores the result because shutting down the app drops the receiver, which causes the send
-        // operation to fail. This is expected behavior and should not panic.
         let _ = self.sender.send(event);
     }
 }

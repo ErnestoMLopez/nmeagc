@@ -7,7 +7,7 @@ use ratatui::{
     style::Color,
     symbols::Marker,
     widgets::{
-        Block, Paragraph, Tabs,
+        Bar, BarChart, BarGroup, Block, Paragraph, Tabs,
         canvas::{Canvas, Circle, Map, MapResolution, Rectangle},
     },
 };
@@ -63,9 +63,42 @@ fn render_monitor_tab(_app: &App, frame: &mut Frame, area: Rect) {
     let block_cn0 = Block::bordered().title("Tracking").style(THEME.borders);
     let block_graphs = Block::bordered().title("Graphs").style(THEME.borders);
 
+    let data = [
+        ('G', 01, 44, true),
+        ('G', 01, 32, true),
+        ('G', 24, 41, true),
+        ('E', 03, 38, true),
+        ('E', 36, 31, false),
+        ('R', 22, 48, true),
+    ];
+    let bars = create_bars(&data);
+    let barchart = BarChart::default()
+        .block(block_cn0)
+        .bar_width(3)
+        .bar_style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
+        .data(bars)
+        .max(55);
+
     frame.render_widget(block_nav, nav_area);
-    frame.render_widget(block_cn0, cn0_area);
+    frame.render_widget(barchart, cn0_area);
     frame.render_widget(block_graphs, graphs_area);
+}
+
+fn create_bars<'a>(data: &[(char, u8, u64, bool)]) -> BarGroup<'a> {
+    let bargroup = data
+        .iter()
+        .map(|(gnss, label, value, is_active)| {
+            Bar::default()
+                .value(*value)
+                .label(format!("{}{}", gnss, label))
+                .style(if *is_active {
+                    ratatui::style::Style::default().fg(ratatui::style::Color::Green)
+                } else {
+                    ratatui::style::Style::default().fg(ratatui::style::Color::Red)
+                })
+        })
+        .collect::<Vec<Bar>>();
+    BarGroup::new(bargroup)
 }
 
 fn render_map_tab(_app: &App, frame: &mut Frame, area: Rect) {

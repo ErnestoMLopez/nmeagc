@@ -69,7 +69,7 @@ impl App {
             }
             KeyCode::Tab => self.tab.next(),
             KeyCode::Right => self.tab.next(),
-            KeyCode::Left => self.tab.previous(),
+            KeyCode::Left => self.tab.prev(),
             _ => {}
         }
         Ok(())
@@ -100,20 +100,16 @@ pub enum AppTab {
 }
 
 impl AppTab {
-    pub fn next(&mut self) {
-        *self = match self {
-            AppTab::Monitor => AppTab::Map,
-            AppTab::Map => AppTab::Raw,
-            AppTab::Raw => AppTab::Monitor,
-        }
+    fn next(&mut self) {
+        let current_index = *self as usize;
+        let next_index = current_index.saturating_add(1);
+        *self = Self::from_repr(next_index).unwrap_or(*self)
     }
 
-    pub fn previous(&mut self) {
-        *self = match self {
-            AppTab::Monitor => AppTab::Raw,
-            AppTab::Map => AppTab::Monitor,
-            AppTab::Raw => AppTab::Map,
-        }
+    fn prev(&mut self) {
+        let current_index = *self as usize;
+        let prev_index = current_index.saturating_sub(1);
+        *self = Self::from_repr(prev_index).unwrap_or(*self)
     }
 
     pub const fn as_str(&self) -> &'static str {

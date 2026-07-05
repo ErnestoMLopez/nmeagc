@@ -3,14 +3,7 @@ use crate::event::{Event, EventHandler};
 use color_eyre::Result;
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::DefaultTerminal;
-
-/// Application events.
-#[derive(Clone, Debug)]
-pub enum AppEvent {
-    /// Quit the application.
-    Quit,
-}
-
+use strum::{Display, EnumIter, FromRepr};
 /// Application.
 #[derive(Debug)]
 pub struct App {
@@ -18,6 +11,8 @@ pub struct App {
     pub running: bool,
     /// Event handler.
     pub event_handler: EventHandler,
+    /// Current tab.
+    pub tab: AppTab,
 }
 
 impl Default for App {
@@ -25,6 +20,7 @@ impl Default for App {
         Self {
             running: true,
             event_handler: EventHandler::new(),
+            tab: AppTab::default(),
         }
     }
 }
@@ -38,7 +34,7 @@ impl App {
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         while self.running {
-            terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
+            terminal.draw(|frame| self.render(frame))?;
             self.handle_events()?;
         }
         Ok(())
@@ -83,5 +79,46 @@ impl App {
     /// Set running to false to quit the application.
     fn quit(&mut self) {
         self.running = false;
+    }
+}
+
+/// Application events.
+#[derive(Clone, Debug)]
+pub enum AppEvent {
+    /// Quit the application.
+    Quit,
+}
+
+#[derive(Debug, Clone, Copy, Default, Display, EnumIter, FromRepr, PartialEq, Eq)]
+pub enum AppTab {
+    #[default]
+    Monitor,
+    Map,
+    Raw,
+}
+
+impl AppTab {
+    pub fn next(&mut self) {
+        *self = match self {
+            AppTab::Monitor => AppTab::Map,
+            AppTab::Map => AppTab::Raw,
+            AppTab::Raw => AppTab::Monitor,
+        }
+    }
+
+    pub fn previous(&mut self) {
+        *self = match self {
+            AppTab::Monitor => AppTab::Raw,
+            AppTab::Map => AppTab::Monitor,
+            AppTab::Raw => AppTab::Map,
+        }
+    }
+
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Monitor => "Monitor",
+            Self::Map => "Map",
+            Self::Raw => "Raw",
+        }
     }
 }

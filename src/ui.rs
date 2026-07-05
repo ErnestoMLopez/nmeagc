@@ -4,7 +4,7 @@ use crate::theme::THEME;
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
-    style::Color,
+    style::{Color, Style},
     symbols::Marker,
     widgets::{
         Bar, BarChart, BarGroup, Block, Paragraph, Tabs,
@@ -75,7 +75,7 @@ fn render_monitor_tab(_app: &App, frame: &mut Frame, area: Rect) {
     let barchart = BarChart::default()
         .block(block_cn0)
         .bar_width(3)
-        .bar_style(ratatui::style::Style::default().fg(ratatui::style::Color::Cyan))
+        .bar_style(Style::default().fg(Color::Cyan))
         .data(bars)
         .max(55);
 
@@ -92,9 +92,9 @@ fn create_bars<'a>(data: &[(char, u8, u64, bool)]) -> BarGroup<'a> {
                 .value(*value)
                 .label(format!("{}{}", gnss, label))
                 .style(if *is_active {
-                    ratatui::style::Style::default().fg(ratatui::style::Color::Green)
+                    Style::default().fg(Color::Green)
                 } else {
-                    ratatui::style::Style::default().fg(ratatui::style::Color::Red)
+                    Style::default().fg(Color::Red)
                 })
         })
         .collect::<Vec<Bar>>();

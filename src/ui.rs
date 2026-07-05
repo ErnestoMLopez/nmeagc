@@ -38,14 +38,30 @@ fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
         .style(THEME.tabs)
         .highlight_style(THEME.tabs_selected)
         .select(app.tab as usize)
-        .divider("")
-        .padding(" ", " ");
+        .divider("");
 
     frame.render_widget(title, title_area);
     frame.render_widget(tabs, tabs_area);
 }
 
-fn render_monitor_tab(_app: &App, _frame: &mut Frame, _area: Rect) {}
+fn render_monitor_tab(_app: &App, frame: &mut Frame, area: Rect) {
+    let layout = Layout::horizontal([Constraint::Length(35), Constraint::Fill(1)]);
+    let [left_area, right_area] = area.layout(&layout);
+    let layout = Layout::vertical([Constraint::Max(12), Constraint::Fill(1)]);
+    let [upper_area, lower_area] = right_area.layout(&layout);
+
+    let nav_area = left_area;
+    let cn0_area = upper_area;
+    let graphs_area = lower_area;
+
+    let block_nav = Block::bordered().title("Navigation").style(THEME.borders);
+    let block_tracking = Block::bordered().title("Tracking").style(THEME.borders);
+    let block_graphs = Block::bordered().title("Graphs").style(THEME.borders);
+
+    frame.render_widget(block_nav, nav_area);
+    frame.render_widget(block_tracking, cn0_area);
+    frame.render_widget(block_graphs, graphs_area);
+}
 
 fn render_map_tab(_app: &App, _frame: &mut Frame, _area: Rect) {}
 

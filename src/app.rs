@@ -4,6 +4,7 @@ use color_eyre::Result;
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
+
 /// Application.
 #[derive(Debug)]
 pub struct App {
@@ -66,8 +67,9 @@ impl App {
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
                 self.event_handler.send(AppEvent::Quit)
             }
-            KeyCode::Right => {}
-            KeyCode::Left => {}
+            KeyCode::Tab => self.tab.next(),
+            KeyCode::Right => self.tab.next(),
+            KeyCode::Left => self.tab.previous(),
             _ => {}
         }
         Ok(())
@@ -116,9 +118,9 @@ impl AppTab {
 
     pub const fn as_str(&self) -> &'static str {
         match self {
-            Self::Monitor => "Monitor",
-            Self::Map => "Map",
-            Self::Raw => "Raw",
+            Self::Monitor => " Monitor ",
+            Self::Map => "   Map   ",
+            Self::Raw => "   Raw   ",
         }
     }
 }

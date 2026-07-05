@@ -1,4 +1,5 @@
 use crate::event::{Event, EventHandler};
+use crate::gnss::SvData;
 
 use color_eyre::Result;
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
@@ -14,6 +15,8 @@ pub struct App {
     pub event_handler: EventHandler,
     /// Current tab.
     pub tab: AppTab,
+    /// GNSS data table.
+    pub sv_data: Vec<SvData>,
 }
 
 impl Default for App {
@@ -22,6 +25,7 @@ impl Default for App {
             running: true,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
+            sv_data: Vec::new(),
         }
     }
 }

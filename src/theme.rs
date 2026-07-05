@@ -19,7 +19,7 @@ pub struct KeyBinding {
 
 pub const THEME: Theme = Theme {
     root: Style::new().bg(MID_BLUE),
-    content: Style::new().bg(DARK_BLUE).fg(LIGHT_GRAY),
+    content: Style::new().bg(MID_BLUE).fg(LIGHT_GRAY),
     app_title: Style::new()
         .fg(WHITE)
         .bg(DARK_BLUE)
@@ -42,7 +42,7 @@ pub const THEME: Theme = Theme {
 };
 
 const DARK_BLUE: Color = Color::Rgb(16, 24, 48);
-const MID_BLUE: Color = Color::Rgb(28, 41, 79);
+const MID_BLUE: Color = Color::Rgb(31, 39, 63);
 // const LIGHT_BLUE: Color = Color::Rgb(64, 96, 192);
 // const LIGHT_YELLOW: Color = Color::Rgb(192, 192, 96);
 // const LIGHT_GREEN: Color = Color::Rgb(64, 192, 96);

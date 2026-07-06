@@ -2,6 +2,7 @@ use crate::app::AppEvent;
 
 use color_eyre::{Result, eyre::WrapErr};
 use crossterm::event::{self, Event as CrosstermEvent};
+use nmea_parser::NmeaParser;
 use std::{
     sync::mpsc,
     thread,
@@ -35,8 +36,10 @@ impl EventHandler {
     /// Constructs a new instance of [`EventHandler`] and spawns a new thread to handle events.
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel();
-        let actor = EventThread::new(sender.clone());
-        thread::spawn(|| actor.run());
+        let tui_handler = EventThread::new(sender.clone());
+        let nmea_handler = EventThread::new(sender.clone());
+        thread::spawn(|| run_tui_handler(tui_handler));
+        thread::spawn(|| run_nmea_handler(nmea_handler));
         Self { sender, receiver }
     }
 
@@ -74,29 +77,55 @@ impl EventThread {
         Self { sender }
     }
 
-    /// Runs the event thread.
-    ///
-    /// This function emits tick events at a fixed rate and polls for crossterm events in between.
-    fn run(self) -> Result<()> {
-        let tick_interval = Duration::from_secs_f64(1.0 / TICK_FPS);
-        let mut last_tick = Instant::now();
-        loop {
-            // Emit tick events at a fixed rate
-            let timeout = tick_interval.saturating_sub(last_tick.elapsed());
-            if timeout == Duration::ZERO {
-                last_tick = Instant::now();
-                self.send(Event::Tick);
-            }
-            // Poll for crossterm events, ensuring that we don't block the tick interval
-            if event::poll(timeout).wrap_err("failed to poll for crossterm events")? {
-                let event = event::read().wrap_err("failed to read crossterm event")?;
-                self.send(Event::Crossterm(event));
-            }
-        }
-    }
-
     /// Sends an event to the receiver.
     fn send(&self, event: Event) {
         let _ = self.sender.send(event);
     }
+}
+
+/// Runs the terminal events thread.
+///
+/// This function emits tick events at a fixed rate and polls for crossterm events in between.
+fn run_tui_handler(actor: EventThread) -> Result<()> {
+    let tick_interval = Duration::from_secs_f64(1.0 / TICK_FPS);
+    let mut last_tick = Instant::now();
+    loop {
+        // Emit tick events at a fixed rate
+        let timeout = tick_interval.saturating_sub(last_tick.elapsed());
+        if timeout == Duration::ZERO {
+            last_tick = Instant::now();
+            actor.send(Event::Tick);
+        }
+        // Poll for crossterm events, ensuring that we don't block the tick interval
+        if event::poll(timeout).wrap_err("failed to poll for crossterm events")? {
+            let event = event::read().wrap_err("failed to read crossterm event")?;
+            actor.send(Event::Crossterm(event));
+        }
+    }
+}
+
+/// Runs the NMEA event thread.
+///
+/// This function emits NMEA events.
+fn run_nmea_handler(actor: EventThread) -> Result<()> {
+    let mut parser = NmeaParser::new();
+
+    // TODO: Reemplazar por la conexión y recepción de mensajes
+    let sentences = vec![
+        "!AIVDM,1,1,,A,H42O55i18tMET00000000000000,2*6D",
+        "!AIVDM,1,1,,A,H42O55lti4hhhilD3nink000?050,0*40",
+        "$GAGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*56",
+    ];
+
+    for sentence in sentences {
+        thread::sleep(Duration::from_millis(1000));
+
+        if let Ok(msg) = parser.parse_sentence(sentence) {
+            actor.send(Event::App(AppEvent::NmeaMessage(Box::new(msg))));
+        }
+
+        actor.send(Event::App(AppEvent::RawNmeaSentence(sentence.to_string())));
+    }
+
+    Ok(())
 }

@@ -3,6 +3,7 @@ use crate::gnss::SvData;
 
 use color_eyre::Result;
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
+use nmea_parser::ParsedMessage;
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
 
@@ -56,6 +57,8 @@ impl App {
             },
             Event::App(app_event) => match app_event {
                 AppEvent::Quit => self.quit(),
+                AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
+                AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
         }
         Ok(())
@@ -79,8 +82,18 @@ impl App {
         Ok(())
     }
 
+    fn handle_nmea_msg(&mut self, _nmea_msg: Box<ParsedMessage>) -> Result<()> {
+        // todo!("Implementar update de App a partir de mensajes NMEA");
+        Ok(())
+    }
+
+    fn handle_raw_nmea(&mut self, _raw: String) -> Result<()> {
+        // todo!("Implementar update de App a partir de sentencias crudas NMEA");
+        Ok(())
+    }
+
     /// Handles the tick event of the terminal.
-    fn tick(&self) {}
+    fn tick(&mut self) {}
 
     /// Set running to false to quit the application.
     fn quit(&mut self) {
@@ -93,6 +106,10 @@ impl App {
 pub enum AppEvent {
     /// Quit the application.
     Quit,
+    /// NMEA message received.
+    NmeaMessage(Box<ParsedMessage>),
+    /// Raw NMEA sentence for raw data logging.
+    RawNmeaSentence(String),
 }
 
 #[derive(Debug, Clone, Copy, Default, Display, EnumIter, FromRepr, PartialEq, Eq)]

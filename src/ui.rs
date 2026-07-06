@@ -63,6 +63,8 @@ fn render_monitor_tab(_app: &App, frame: &mut Frame, area: Rect) {
     let block_cn0 = Block::bordered().title("Tracking").style(THEME.borders);
     let block_graphs = Block::bordered().title("Graphs").style(THEME.borders);
 
+    // TODO: Reemplazar por la obtención de datos del estado de la app
+    // TODO: Modularizar creando widget que genere internamente el gráfico de barras por satélite y por señal de cada satélite
     let data = [
         ('G', 01, 44, true),
         ('G', 01, 32, true),
@@ -84,6 +86,7 @@ fn render_monitor_tab(_app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(block_graphs, graphs_area);
 }
 
+// TODO: Esto es solo un ejemplo basi para después reemplazar por un custom widget
 fn create_bars<'a>(data: &[(char, u8, u64, bool)]) -> BarGroup<'a> {
     let bargroup = data
         .iter()
@@ -107,6 +110,7 @@ fn render_map_tab(_app: &App, frame: &mut Frame, area: Rect) {
 
     let block = Block::bordered().title("Navigation").style(THEME.borders);
 
+    // TODO: Reemplazar por la obtención de datos de la estructura de estado de la app
     let map = Canvas::default()
         .block(Block::bordered().title("Worldmap").style(THEME.borders))
         .background_color(THEME.root.bg.unwrap_or(Color::Reset))

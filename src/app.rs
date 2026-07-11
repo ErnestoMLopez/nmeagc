@@ -1,11 +1,15 @@
 use crate::event::{Event, EventHandler};
 use crate::gnss::SvData;
 
+use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
 use nmea_parser::ParsedMessage;
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
+
+/// Maximum amount of NMEA sentences to store and render in the raw data tab
+const MAX_RAW_NMEA_LOGS: usize = 1000;
 
 /// Application.
 #[derive(Debug)]
@@ -18,6 +22,8 @@ pub struct App {
     pub tab: AppTab,
     /// GNSS data table.
     pub sv_data: Vec<SvData>,
+    /// Raw NMEA data logs.
+    pub raw_data: FixedCircularBuffer<String, MAX_RAW_NMEA_LOGS>,
 }
 
 impl Default for App {
@@ -27,6 +33,7 @@ impl Default for App {
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
             sv_data: Vec::new(),
+            raw_data: FixedCircularBuffer::<String, MAX_RAW_NMEA_LOGS>::new(),
         }
     }
 }
@@ -87,8 +94,8 @@ impl App {
         Ok(())
     }
 
-    fn handle_raw_nmea(&mut self, _raw: String) -> Result<()> {
-        // todo!("Implementar update de App a partir de sentencias crudas NMEA");
+    fn handle_raw_nmea(&mut self, raw: String) -> Result<()> {
+        self.raw_data.push_back(raw);
         Ok(())
     }
 

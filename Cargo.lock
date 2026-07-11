@@ -192,6 +192,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "circular-buffer"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7f5610398bbf405be68c4daeadee379d4dca31226cdf9076746a875bc58a69e3"
+
+[[package]]
 name = "color-eyre"
 version = "0.6.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -824,6 +830,7 @@ dependencies = [
 name = "nmeagc"
 version = "0.1.0"
 dependencies = [
+ "circular-buffer",
  "color-eyre",
  "crossterm",
  "nmea-parser",

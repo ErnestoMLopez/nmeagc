@@ -1,6 +1,7 @@
 use crate::app::{App, AppTab};
 use crate::theme::THEME;
 
+use ratatui::text::{Line, Text};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
@@ -143,7 +144,7 @@ fn render_map_tab(_app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(map, map_area);
 }
 
-fn render_raw_tab(_app: &App, frame: &mut Frame, area: Rect) {
+fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
     let layout = Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]);
     let [left_area, right_area] = area.layout(&layout);
     let layout = Layout::vertical([Constraint::Min(0), Constraint::Max(3)]);
@@ -157,7 +158,17 @@ fn render_raw_tab(_app: &App, frame: &mut Frame, area: Rect) {
     let block_raw = Block::bordered().title("Raw data").style(THEME.borders);
     let block_search = Block::bordered().title("Search").style(THEME.borders);
 
+    let logs: Vec<Line> = app
+        .raw_data
+        .iter()
+        .map(|log| Line::from(log.clone()).style(THEME.content))
+        .collect();
+
+    let logs_paragraph = Paragraph::new(Text::from(logs))
+        .block(block_raw)
+        .left_aligned();
+
     frame.render_widget(block_msg, msg_area);
-    frame.render_widget(block_raw, raw_area);
+    frame.render_widget(logs_paragraph, raw_area);
     frame.render_widget(block_search, search_area);
 }

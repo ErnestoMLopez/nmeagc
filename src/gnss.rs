@@ -1,3 +1,9 @@
+use nmea_parser::ParsedMessage;
+
+pub trait ParsedMessagedExt {
+    fn is_gnss_sentence(&self) -> bool;
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gnss {
     Gps,
@@ -89,4 +95,18 @@ pub struct SvData {
     pub elevation: Option<f32>,
     /// Azimuth [degrees]
     pub azimuth: Option<f32>,
+}
+
+impl ParsedMessagedExt for ParsedMessage {
+    fn is_gnss_sentence(&self) -> bool {
+        match self {
+            ParsedMessage::Gga(_) => true,
+            ParsedMessage::Rmc(_) => true,
+            ParsedMessage::Gns(_) => true,
+            ParsedMessage::Gsa(_) => true,
+            ParsedMessage::Gsv(_) => true,
+            ParsedMessage::Gll(_) => true,
+            _ => false,
+        }
+    }
 }

@@ -1,4 +1,7 @@
-use crate::app::AppEvent;
+use crate::{
+    app::{AppEvent, RawNmeaLog, RawNmeaStatus},
+    gnss::ParsedMessagedExt,
+};
 
 use color_eyre::{Result, eyre::WrapErr};
 use crossterm::event::{self, Event as CrosstermEvent};
@@ -120,11 +123,27 @@ fn run_nmea_handler(actor: EventThread) -> Result<()> {
     for sentence in sentences {
         thread::sleep(Duration::from_millis(1000));
 
-        if let Ok(msg) = parser.parse_sentence(sentence) {
-            actor.send(Event::App(AppEvent::NmeaMessage(Box::new(msg))));
+        let raw_status: RawNmeaStatus;
+
+        match parser.parse_sentence(sentence) {
+            Ok(msg) => {
+                raw_status = if msg.is_gnss_sentence() {
+                    RawNmeaStatus::Gnss
+                } else {
+                    RawNmeaStatus::Other
+                };
+                actor.send(Event::App(AppEvent::NmeaMessage(Box::new(msg))))
+            }
+            Err(_) => raw_status = RawNmeaStatus::Error,
         }
 
-        actor.send(Event::App(AppEvent::RawNmeaSentence(sentence.to_string())));
+        let nmea_log = RawNmeaLog {
+            sentence: sentence.to_string(),
+            status: raw_status,
+        };
+
+        let app_event = AppEvent::RawNmeaSentence(nmea_log);
+        actor.send(Event::App(app_event));
     }
 
     Ok(())

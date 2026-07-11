@@ -23,7 +23,7 @@ pub struct App {
     /// GNSS data table.
     pub sv_data: Vec<SvData>,
     /// Raw NMEA data logs.
-    pub raw_data: FixedCircularBuffer<String, MAX_RAW_NMEA_LOGS>,
+    pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
 }
 
 impl Default for App {
@@ -33,7 +33,7 @@ impl Default for App {
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
             sv_data: Vec::new(),
-            raw_data: FixedCircularBuffer::<String, MAX_RAW_NMEA_LOGS>::new(),
+            raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
         }
     }
 }
@@ -94,7 +94,7 @@ impl App {
         Ok(())
     }
 
-    fn handle_raw_nmea(&mut self, raw: String) -> Result<()> {
+    fn handle_raw_nmea(&mut self, raw: RawNmeaLog) -> Result<()> {
         self.raw_data.push_back(raw);
         Ok(())
     }
@@ -116,7 +116,7 @@ pub enum AppEvent {
     /// NMEA message received.
     NmeaMessage(Box<ParsedMessage>),
     /// Raw NMEA sentence for raw data logging.
-    RawNmeaSentence(String),
+    RawNmeaSentence(RawNmeaLog),
 }
 
 #[derive(Debug, Clone, Copy, Default, Display, EnumIter, FromRepr, PartialEq, Eq)]
@@ -147,4 +147,18 @@ impl AppTab {
             Self::Raw => "   Raw   ",
         }
     }
+}
+
+#[derive(Clone, Debug)]
+pub struct RawNmeaLog {
+    pub sentence: String,
+    pub status: RawNmeaStatus,
+}
+
+#[derive(Clone, Debug)]
+pub enum RawNmeaStatus {
+    Gnss,
+    Other,
+    Incomplete,
+    Error,
 }

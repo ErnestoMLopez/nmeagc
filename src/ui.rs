@@ -161,7 +161,7 @@ fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
     let logs: Vec<Line> = app
         .raw_data
         .iter()
-        .map(|log| Line::from(log.clone()).style(THEME.content))
+        .map(|log| Line::from(log.sentence.clone()).style(THEME.content))
         .collect();
 
     let logs_paragraph = Paragraph::new(Text::from(logs))

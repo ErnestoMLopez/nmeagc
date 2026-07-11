@@ -1,4 +1,5 @@
 use crate::app::{App, AppTab};
+use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
 
 use ratatui::text::{Line, Text};
@@ -158,17 +159,33 @@ fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
     let block_raw = Block::bordered().title("Raw data").style(THEME.borders);
     let block_search = Block::bordered().title("Search").style(THEME.borders);
 
-    let logs: Vec<Line> = app
-        .raw_data
-        .iter()
-        .map(|log| Line::from(log.sentence.clone()).style(THEME.content))
-        .collect();
+    let logs = Text::from(
+        app.raw_data
+            .iter()
+            .map(|log| Line::from(log))
+            .collect::<Vec<Line>>(),
+    );
 
-    let logs_paragraph = Paragraph::new(Text::from(logs))
+    let scroll_offset = (app.raw_data.len() as u16).saturating_sub(raw_area.height - 2);
+
+    let logs_paragraph = Paragraph::new(logs)
         .block(block_raw)
-        .left_aligned();
+        .left_aligned()
+        .scroll((scroll_offset, 0));
 
     frame.render_widget(block_msg, msg_area);
     frame.render_widget(logs_paragraph, raw_area);
     frame.render_widget(block_search, search_area);
+}
+
+impl<'a> From<&RawNmeaLog> for Line<'a> {
+    fn from(log: &RawNmeaLog) -> Self {
+        let sentence = log.sentence.clone();
+        match log.status {
+            RawNmeaStatus::Gnss => Line::styled(sentence, Style::new().green()),
+            RawNmeaStatus::Error => Line::styled(sentence, Style::new().red()),
+            RawNmeaStatus::Incomplete => Line::styled(sentence, Style::new().light_blue()),
+            RawNmeaStatus::Other => Line::styled(sentence, Style::new().gray()),
+        }
+    }
 }

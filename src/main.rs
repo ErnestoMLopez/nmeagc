@@ -3,6 +3,7 @@ use crate::app::App;
 pub mod app;
 pub mod event;
 pub mod gnss;
+pub mod nmea;
 pub mod theme;
 pub mod ui;
 

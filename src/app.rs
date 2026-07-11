@@ -1,5 +1,6 @@
 use crate::event::{Event, EventHandler};
 use crate::gnss::SvData;
+use crate::nmea::RawNmeaLog;
 
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
@@ -89,8 +90,16 @@ impl App {
         Ok(())
     }
 
-    fn handle_nmea_msg(&mut self, _nmea_msg: Box<ParsedMessage>) -> Result<()> {
-        // todo!("Implementar update de App a partir de mensajes NMEA");
+    fn handle_nmea_msg(&mut self, nmea_msg: Box<ParsedMessage>) -> Result<()> {
+        match *nmea_msg {
+            ParsedMessage::Gga(_) => {}
+            ParsedMessage::Rmc(_) => {}
+            ParsedMessage::Gns(_) => {}
+            ParsedMessage::Gsa(_) => {}
+            ParsedMessage::Gsv(_) => {}
+            ParsedMessage::Gll(_) => {}
+            _ => {}
+        }
         Ok(())
     }
 
@@ -147,18 +156,4 @@ impl AppTab {
             Self::Raw => "   Raw   ",
         }
     }
-}
-
-#[derive(Clone, Debug)]
-pub struct RawNmeaLog {
-    pub sentence: String,
-    pub status: RawNmeaStatus,
-}
-
-#[derive(Clone, Debug)]
-pub enum RawNmeaStatus {
-    Gnss,
-    Other,
-    Incomplete,
-    Error,
 }

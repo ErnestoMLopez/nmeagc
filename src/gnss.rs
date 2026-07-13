@@ -90,3 +90,38 @@ pub struct SvData {
     /// Azimuth [degrees]
     pub azimuth: Option<f32>,
 }
+
+#[derive(Debug, Clone)]
+pub struct NavigationData {
+    /// Position coordinates
+    pub position: Option<Position>,
+    /// Velocity coordinates
+    pub velocity: Option<Velocity>,
+}
+
+impl Default for NavigationData {
+    fn default() -> Self {
+        Self {
+            position: None,
+            velocity: None,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub enum Position {
+    /// Geodetic coordinates: Latitude [°], longitude [°], ellipsoidal altitude [m]
+    Lla(f64, f64, f64),
+    /// Earth-Centered Earth-Fixed coordinates
+    Ecef(f64, f64, f64),
+    /// Earth-Centered Inertial coordinates
+    Eci(f64, f64, f64),
+}
+
+#[derive(Debug, Clone)]
+pub enum Velocity {
+    /// Earth-Centered Earth-Fixed coordinates
+    Ecef(f64, f64, f64),
+    /// Earth-Centered Inertial coordinates
+    Eci(f64, f64, f64),
+}

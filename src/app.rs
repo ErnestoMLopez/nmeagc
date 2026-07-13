@@ -1,5 +1,5 @@
 use crate::event::{Event, EventHandler};
-use crate::gnss::SvData;
+use crate::gnss::{NavigationData, SvData};
 use crate::nmea::RawNmeaLog;
 
 use circular_buffer::FixedCircularBuffer;
@@ -21,6 +21,8 @@ pub struct App {
     pub event_handler: EventHandler,
     /// Current tab.
     pub tab: AppTab,
+    /// Last navigation solution available
+    pub nav_data: NavigationData,
     /// GNSS data table.
     pub sv_data: Vec<SvData>,
     /// Raw NMEA data logs.
@@ -33,6 +35,7 @@ impl Default for App {
             running: true,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
+            nav_data: NavigationData::default(),
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
         }
@@ -92,7 +95,7 @@ impl App {
 
     fn handle_nmea_msg(&mut self, nmea_msg: Box<ParsedMessage>) -> Result<()> {
         match *nmea_msg {
-            ParsedMessage::Gga(_) => {}
+            ParsedMessage::Gga(gga) => self.update_from_gga(gga),
             ParsedMessage::Rmc(_) => {}
             ParsedMessage::Gns(_) => {}
             ParsedMessage::Gsa(_) => {}

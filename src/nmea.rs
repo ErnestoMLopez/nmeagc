@@ -18,7 +18,7 @@ pub enum RawNmeaStatus {
 }
 
 impl App {
-    pub fn update_from_gga(&mut self, msg: GgaData) {
+    pub fn update_from_gga(&mut self, msg: &GgaData) {
         if let Some(_) = msg.timestamp {
             //
         }

@@ -1,3 +1,5 @@
+use chrono::{DateTime, Utc};
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gnss {
     Gps,
@@ -93,35 +95,28 @@ pub struct SvData {
 
 #[derive(Debug, Clone)]
 pub struct NavigationData {
+    /// UTC time
+    pub time: Option<DateTime<Utc>>,
     /// Position coordinates
     pub position: Option<Position>,
-    /// Velocity coordinates
-    pub velocity: Option<Velocity>,
 }
 
 impl Default for NavigationData {
     fn default() -> Self {
         Self {
+            time: None,
             position: None,
-            velocity: None,
         }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum Position {
-    /// Geodetic coordinates: Latitude [°], longitude [°], ellipsoidal altitude [m]
-    Lla(f64, f64, f64),
-    /// Earth-Centered Earth-Fixed coordinates
-    Ecef(f64, f64, f64),
-    /// Earth-Centered Inertial coordinates
-    Eci(f64, f64, f64),
-}
-
-#[derive(Debug, Clone)]
-pub enum Velocity {
-    /// Earth-Centered Earth-Fixed coordinates
-    Ecef(f64, f64, f64),
-    /// Earth-Centered Inertial coordinates
-    Eci(f64, f64, f64),
+/// Geodetic coordinates
+pub struct Position {
+    /// Geodetic latitude [°]
+    pub latitude: f64,
+    /// Geodetic longitude [°]
+    pub longitude: f64,
+    /// Ellipsoidal altitude [m]
+    pub altitude: f64,
 }

@@ -1,4 +1,5 @@
 use crate::app::{App, AppTab};
+use crate::gnss::Position;
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
 
@@ -51,7 +52,7 @@ fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(tabs, tabs_area);
 }
 
-fn render_monitor_tab(_app: &App, frame: &mut Frame, area: Rect) {
+fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
     let layout = Layout::horizontal([Constraint::Length(35), Constraint::Fill(1)]);
     let [left_area, right_area] = area.layout(&layout);
     let layout = Layout::vertical([Constraint::Max(12), Constraint::Fill(1)]);
@@ -64,6 +65,22 @@ fn render_monitor_tab(_app: &App, frame: &mut Frame, area: Rect) {
     let block_nav = Block::bordered().title("Navigation").style(THEME.borders);
     let block_cn0 = Block::bordered().title("Tracking").style(THEME.borders);
     let block_graphs = Block::bordered().title("Graphs").style(THEME.borders);
+
+    let mut pos = Position {
+        latitude: f64::NAN,
+        longitude: f64::NAN,
+        altitude: f64::NAN,
+    };
+
+    if let Some(lla) = &app.nav_data.position {
+        pos = lla.clone();
+    }
+
+    let nav_text = Paragraph::new(format!(
+        " Latitude: {}\n Longitude: {}\n Altitude: {}",
+        pos.latitude, pos.longitude, pos.altitude
+    ))
+    .block(block_nav);
 
     // TODO: Reemplazar por la obtención de datos del estado de la app
     // TODO: Modularizar creando widget que genere internamente el gráfico de barras por satélite y por señal de cada satélite
@@ -83,7 +100,7 @@ fn render_monitor_tab(_app: &App, frame: &mut Frame, area: Rect) {
         .data(bars)
         .max(55);
 
-    frame.render_widget(block_nav, nav_area);
+    frame.render_widget(nav_text, nav_area);
     frame.render_widget(barchart, cn0_area);
     frame.render_widget(block_graphs, graphs_area);
 }

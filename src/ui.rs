@@ -66,15 +66,15 @@ fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
     let block_cn0 = Block::bordered().title("Tracking").style(THEME.borders);
     let block_graphs = Block::bordered().title("Graphs").style(THEME.borders);
 
-    let mut pos = Position {
-        latitude: f64::NAN,
-        longitude: f64::NAN,
-        altitude: f64::NAN,
+    let pos = if let Some(lla) = &app.nav_data.position {
+        lla.clone()
+    } else {
+        Position {
+            latitude: f64::NAN,
+            longitude: f64::NAN,
+            altitude: f64::NAN,
+        }
     };
-
-    if let Some(lla) = &app.nav_data.position {
-        pos = lla.clone();
-    }
 
     let nav_text = Paragraph::new(format!(
         " Latitude: {}\n Longitude: {}\n Altitude: {}",

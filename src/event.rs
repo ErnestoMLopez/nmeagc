@@ -41,8 +41,8 @@ impl EventHandler {
         let (sender, receiver) = mpsc::channel();
         let tui_handler = EventThread::new(sender.clone());
         let nmea_handler = EventThread::new(sender.clone());
-        thread::spawn(|| run_tui_handler(tui_handler));
-        thread::spawn(|| run_nmea_handler(nmea_handler));
+        thread::spawn(move || run_tui_handler(tui_handler));
+        thread::spawn(move || run_nmea_handler(nmea_handler));
         Self { sender, receiver }
     }
 

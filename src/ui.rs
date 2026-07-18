@@ -3,15 +3,15 @@ use crate::gnss::Position;
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
 
-use ratatui::text::{Line, Text};
 use ratatui::{
     Frame,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     symbols::Marker,
+    text::{Line, Text},
     widgets::{
         Bar, BarChart, BarGroup, Block, Paragraph, Tabs,
-        canvas::{Canvas, Circle, Map, MapResolution, Rectangle},
+        canvas::{Canvas, Circle, Map, MapResolution, Points, Rectangle},
     },
 };
 use strum::IntoEnumIterator;
@@ -149,6 +149,10 @@ fn render_map_tab(_app: &App, frame: &mut Frame, area: Rect) {
                 width: 1.0,
                 height: 1.0,
                 color: Color::Yellow,
+            });
+            ctx.draw(&Points {
+                coords: &[(coordinates)],
+                color: Color::LightRed,
             });
             ctx.draw(&Circle {
                 x: coordinates.0,

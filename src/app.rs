@@ -96,7 +96,7 @@ impl App {
     fn handle_nmea_msg(&mut self, nmea_msg: Box<ParsedMessage>) -> Result<()> {
         match *nmea_msg {
             ParsedMessage::Gga(gga) => self.update_from_gga(&gga),
-            ParsedMessage::Rmc(_) => {}
+            ParsedMessage::Rmc(rmc) => self.update_from_rmc(&rmc),
             ParsedMessage::Gns(_) => {}
             ParsedMessage::Gsa(_) => {}
             ParsedMessage::Gsv(_) => {}

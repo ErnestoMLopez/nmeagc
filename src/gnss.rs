@@ -1,3 +1,5 @@
+use crate::nmea::SolutionType;
+
 use chrono::{DateTime, Utc};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -6,6 +8,17 @@ pub enum Gnss {
     Glonass,
     Galileo,
     Beidou,
+    Other,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NavigationGnss {
+    Combined,
+    Gps,
+    Glonass,
+    Galileo,
+    Beidou,
+    Other,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,17 +108,35 @@ pub struct SvData {
 
 #[derive(Debug, Clone)]
 pub struct NavigationData {
+    /// Navigation solution GNSS
+    pub gnss: NavigationGnss,
+    /// Navigation solution type
+    pub solution_type: SolutionType,
     /// UTC time
     pub time: Option<DateTime<Utc>>,
-    /// Position coordinates
+    /// Position coordinates (w.r.t. ellipsoide) [°,°,m]
     pub position: Option<Position>,
+    /// Geoid-ellipsoid separation [m]
+    pub geoid_separation: Option<f64>,
+    /// Satellites used for the navigation solution.
+    pub svs_used: u8,
+    /// Age of differential data.
+    pub differential_data_age: Option<f64>,
+    /// Differential reference station ID.
+    pub differential_ref_station_id: Option<u16>,
 }
 
 impl Default for NavigationData {
     fn default() -> Self {
         Self {
+            gnss: NavigationGnss::Gps,
+            solution_type: SolutionType::Invalid,
             time: None,
             position: None,
+            geoid_separation: None,
+            svs_used: 0,
+            differential_data_age: None,
+            differential_ref_station_id: None,
         }
     }
 }

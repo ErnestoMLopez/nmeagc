@@ -1,5 +1,5 @@
 use crate::app::App;
-use crate::gnss::{NavigationGnss, Position};
+use crate::gnss::NavigationGnss;
 
 use nmea_parser::gnss::{GgaData, RmcData};
 
@@ -73,22 +73,9 @@ impl App {
         self.nav_data.time = msg.timestamp;
         self.nav_data.solution_type = msg.quality.into();
         self.nav_data.svs_used = msg.satellite_count.unwrap_or_default();
-
-        if let (Some(lat), Some(lon), Some(hei), Some(geoid_sep)) = (
-            msg.latitude,
-            msg.longitude,
-            msg.altitude,
-            msg.geoid_separation,
-        ) {
-            self.nav_data.position = Some(Position {
-                latitude: lat,
-                longitude: lon,
-                altitude: hei + geoid_sep,
-            });
-        } else {
-            self.nav_data.position = None;
-        }
-
+        self.nav_data.latitude = msg.latitude;
+        self.nav_data.longitude = msg.longitude;
+        self.nav_data.altitude = msg.altitude;
         self.nav_data.geoid_separation = msg.geoid_separation;
         self.nav_data.differential_data_age = msg.age_of_dgps;
         self.nav_data.differential_ref_station_id = msg.ref_station_id;

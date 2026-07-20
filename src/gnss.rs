@@ -114,8 +114,12 @@ pub struct NavigationData {
     pub solution_type: SolutionType,
     /// UTC time
     pub time: Option<DateTime<Utc>>,
-    /// Position coordinates (w.r.t. ellipsoide) [°,°,m]
-    pub position: Option<Position>,
+    /// Geodetic latitude (°)
+    pub latitude: Option<f64>,
+    /// Geodetic longitude (°)
+    pub longitude: Option<f64>,
+    /// Mean-Sea-Level altitude (m)
+    pub altitude: Option<f64>,
     /// Geoid-ellipsoid separation [m]
     pub geoid_separation: Option<f64>,
     /// Satellites used for the navigation solution.
@@ -132,22 +136,13 @@ impl Default for NavigationData {
             gnss: NavigationGnss::Gps,
             solution_type: SolutionType::Invalid,
             time: None,
-            position: None,
+            latitude: None,
+            longitude: None,
+            altitude: None,
             geoid_separation: None,
             svs_used: 0,
             differential_data_age: None,
             differential_ref_station_id: None,
         }
     }
-}
-
-#[derive(Debug, Clone)]
-/// Geodetic coordinates
-pub struct Position {
-    /// Geodetic latitude [°]
-    pub latitude: f64,
-    /// Geodetic longitude [°]
-    pub longitude: f64,
-    /// Ellipsoidal altitude [m]
-    pub altitude: f64,
 }

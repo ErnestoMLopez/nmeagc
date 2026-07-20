@@ -1,5 +1,4 @@
 use crate::app::{App, AppTab};
-use crate::gnss::Position;
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
 
@@ -66,21 +65,28 @@ fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
     let block_cn0 = Block::bordered().title("Tracking").style(THEME.borders);
     let block_graphs = Block::bordered().title("Graphs").style(THEME.borders);
 
-    let pos = if let Some(lla) = &app.nav_data.position {
-        lla.clone()
-    } else {
-        Position {
-            latitude: f64::NAN,
-            longitude: f64::NAN,
-            altitude: f64::NAN,
-        }
-    };
-
-    let nav_text = Paragraph::new(format!(
-        " Latitude: {}\n Longitude: {}\n Altitude: {}",
-        pos.latitude, pos.longitude, pos.altitude
-    ))
-    .block(block_nav);
+    let lines = vec![
+        Line::from(format!(
+            "Latitude:  {}",
+            app.nav_data
+                .latitude
+                .map_or("-".to_string(), |lat| format_latitude(lat))
+        )),
+        Line::from(format!(
+            "Longitude: {}",
+            app.nav_data
+                .longitude
+                .map_or("-".to_string(), |lon| format_longitude(lon))
+        )),
+        Line::from(format!(
+            "Altitude:  {} m (MSL)",
+            app.nav_data
+                .altitude
+                .map(|alt| format!("{:.3}", alt))
+                .unwrap_or("-".to_string())
+        )),
+    ];
+    let nav_text = Paragraph::new(lines).block(block_nav);
 
     // TODO: Reemplazar por la obtención de datos del estado de la app
     // TODO: Modularizar creando widget que genere internamente el gráfico de barras por satélite y por señal de cada satélite
@@ -209,4 +215,27 @@ impl<'a> From<&RawNmeaLog> for Line<'a> {
             RawNmeaStatus::Other => Line::styled(sentence, Style::new().gray()),
         }
     }
+}
+
+// TODO: Mover a un módulo nuevo
+fn format_latitude(lat: f64) -> String {
+    let direction = if lat >= 0.0 { "N" } else { "S" };
+    let abs_lat = lat.abs();
+    let degrees = abs_lat.floor() as i32;
+    let minutes_raw = (abs_lat - degrees as f64) * 60.0;
+    let minutes = minutes_raw.floor() as i32;
+    let seconds = (minutes_raw - minutes as f64) * 60.0;
+
+    format!("{}° {}' {:.2}\" {}", degrees, minutes, seconds, direction)
+}
+
+fn format_longitude(lon: f64) -> String {
+    let direction = if lon >= 0.0 { "E" } else { "W" };
+    let abs_lon = lon.abs();
+    let degrees = abs_lon.floor() as i32;
+    let minutes_raw = (abs_lon - degrees as f64) * 60.0;
+    let minutes = minutes_raw.floor() as i32;
+    let seconds = (minutes_raw - minutes as f64) * 60.0;
+
+    format!("{}° {}' {:.2}\" {}", degrees, minutes, seconds, direction)
 }

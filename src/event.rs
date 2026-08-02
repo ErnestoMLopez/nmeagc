@@ -3,9 +3,11 @@ use crate::{
     nmea::{RawNmeaLog, RawNmeaStatus},
 };
 
+use std::sync::{Arc, Mutex};
+
 use color_eyre::{Result, eyre::WrapErr};
 use crossterm::event::{self, Event as CrosstermEvent};
-use nmea_parser::{NmeaParser, ParsedMessage};
+use nmea::{Nmea, SentenceType};
 use std::{
     sync::mpsc,
     thread,
@@ -37,12 +39,12 @@ pub struct EventHandler {
 
 impl EventHandler {
     /// Constructs a new instance of [`EventHandler`] and spawns a new thread to handle events.
-    pub fn new() -> Self {
+    pub fn new(nmea_parser: Arc<Mutex<Nmea>>) -> Self {
         let (sender, receiver) = mpsc::channel();
         let tui_handler = EventThread::new(sender.clone());
         let nmea_handler = EventThread::new(sender.clone());
         thread::spawn(move || run_tui_handler(tui_handler));
-        thread::spawn(move || run_nmea_handler(nmea_handler));
+        thread::spawn(move || run_nmea_handler(nmea_handler, nmea_parser));
         Self { sender, receiver }
     }
 
@@ -110,9 +112,7 @@ fn run_tui_handler(actor: EventThread) -> Result<()> {
 /// Runs the NMEA event thread.
 ///
 /// This function emits NMEA events.
-fn run_nmea_handler(actor: EventThread) -> Result<()> {
-    let mut parser = NmeaParser::new();
-
+fn run_nmea_handler(actor: EventThread, parser: Arc<Mutex<Nmea>>) -> Result<()> {
     // TODO: Reemplazar por la conexión y recepción de mensajes
     let sentences = vec![
         "!AIVDM,1,1,,A,H42O55i18tMET00000000000000,2*6D",
@@ -208,20 +208,21 @@ fn run_nmea_handler(actor: EventThread) -> Result<()> {
 
         let raw_status: RawNmeaStatus;
 
-        match parser.parse_sentence(sentence) {
-            Ok(msg) => {
-                raw_status = match msg {
-                    ParsedMessage::Gga(_) => RawNmeaStatus::Gnss,
-                    ParsedMessage::Rmc(_) => RawNmeaStatus::Gnss,
-                    ParsedMessage::Gns(_) => RawNmeaStatus::Gnss,
-                    ParsedMessage::Gsa(_) => RawNmeaStatus::Gnss,
-                    ParsedMessage::Gsv(_) => RawNmeaStatus::Gnss,
-                    ParsedMessage::Gll(_) => RawNmeaStatus::Gnss,
-                    ParsedMessage::Incomplete => RawNmeaStatus::Incomplete,
+        let mut nmea_parser = parser.lock().expect("mutex poisoned");
+
+        match nmea_parser.parse(sentence) {
+            Ok(sentence_type) => {
+                raw_status = match sentence_type {
+                    SentenceType::GGA
+                    | SentenceType::RMC
+                    | SentenceType::GNS
+                    | SentenceType::GSA
+                    | SentenceType::GSV
+                    | SentenceType::GLL => RawNmeaStatus::Gnss,
                     _ => RawNmeaStatus::Other,
                 };
 
-                actor.send(Event::App(AppEvent::NmeaMessage(Box::new(msg))))
+                actor.send(Event::App(AppEvent::NmeaMessage(sentence_type)))
             }
             Err(_) => raw_status = RawNmeaStatus::Error,
         }

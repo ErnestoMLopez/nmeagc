@@ -12,16 +12,6 @@ pub enum Gnss {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum NavigationGnss {
-    Combined,
-    Gps,
-    Glonass,
-    Galileo,
-    Beidou,
-    Other,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpsSignal {
     L1CA,
     L1C,
@@ -108,8 +98,6 @@ pub struct SvData {
 
 #[derive(Debug, Clone)]
 pub struct NavigationData {
-    /// Navigation solution GNSS
-    pub gnss: NavigationGnss,
     /// Navigation solution type
     pub solution_type: SolutionType,
     /// UTC time
@@ -133,7 +121,6 @@ pub struct NavigationData {
 impl Default for NavigationData {
     fn default() -> Self {
         Self {
-            gnss: NavigationGnss::Gps,
             solution_type: SolutionType::Invalid,
             time: None,
             latitude: None,

@@ -65,23 +65,25 @@ fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
     let block_cn0 = Block::bordered().title("Tracking").style(THEME.borders);
     let block_graphs = Block::bordered().title("Graphs").style(THEME.borders);
 
+    let nmea_data = app.nmea_data.lock().expect("mutex poisoned");
+
     let lines = vec![
         Line::from(format!(
             "Latitude:  {}",
-            app.nav_data
-                .latitude
-                .map_or("-".to_string(), |lat| format_latitude(lat))
+            nmea_data
+                .latitude()
+                .map_or("-".to_string(), |lat| { format_latitude(lat) })
         )),
         Line::from(format!(
             "Longitude: {}",
-            app.nav_data
-                .longitude
+            nmea_data
+                .longitude()
                 .map_or("-".to_string(), |lon| format_longitude(lon))
         )),
         Line::from(format!(
             "Altitude:  {} m (MSL)",
-            app.nav_data
-                .altitude
+            nmea_data
+                .altitude()
                 .map(|alt| format!("{:.3}", alt))
                 .unwrap_or("-".to_string())
         )),
@@ -209,10 +211,9 @@ impl<'a> From<&RawNmeaLog> for Line<'a> {
     fn from(log: &RawNmeaLog) -> Self {
         let sentence = log.sentence.clone();
         match log.status {
-            RawNmeaStatus::Gnss => Line::styled(sentence, Style::new().green()),
+            RawNmeaStatus::Gnss => Line::styled(sentence, Style::new().gray()),
             RawNmeaStatus::Error => Line::styled(sentence, Style::new().red()),
-            RawNmeaStatus::Incomplete => Line::styled(sentence, Style::new().light_blue()),
-            RawNmeaStatus::Other => Line::styled(sentence, Style::new().gray()),
+            RawNmeaStatus::Other => Line::styled(sentence, Style::new().light_blue()),
         }
     }
 }

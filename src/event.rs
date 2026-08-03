@@ -136,7 +136,15 @@ fn run_nmea_handler(actor: EventThread, parser: Arc<Mutex<Nmea>>) -> Result<()> 
 
                 actor.send(Event::App(AppEvent::NmeaMessage(sentence_type)))
             }
-            Err(_) => raw_status = RawNmeaStatus::Error,
+            Err(err) => {
+                // Atajamos los casos que nos interesarían, pero como no son soportados por la librería nmea, los
+                // marcamos como tales, dejando a todos los demás no categorizados.
+                raw_status = match err {
+                    nmea::Error::Unsupported(SentenceType::GST) => RawNmeaStatus::Unimplemented,
+                    nmea::Error::Unsupported(_) => RawNmeaStatus::Other,
+                    _ => RawNmeaStatus::Error,
+                }
+            }
         }
 
         let nmea_log = RawNmeaLog {
@@ -153,6 +161,7 @@ fn run_nmea_handler(actor: EventThread, parser: Arc<Mutex<Nmea>>) -> Result<()> 
 const TEST_SENTENCES: &[&str] = &[
     "!AIVDM,1,1,,A,H42O55i18tMET00000000000000,2*6D",
     "!AIVDM,1,1,,A,H42O55lti4hhhilD3nink000?050,0*40",
+    "$GPGST,182141.000,15.5,15.3,7.2,21.8,0.9,0.5,0.8*54",
     "$GAGGA,123519,4807.038,N,01131.000,E,1,08,0.9,545.4,M,46.9,M,,*56",
     "$GPGGA,172400.00,3455.1280,S,05757.7830,W,1,08,0.9,25.0,M,10.0,M,,*54",
     "$GPRMC,172400.00,A,3455.1280,S,05757.7830,W,60.0,180.0,110726,,,A*6D",

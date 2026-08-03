@@ -214,6 +214,7 @@ impl<'a> From<&RawNmeaLog> for Line<'a> {
             RawNmeaStatus::Gnss => Line::styled(sentence, Style::new().gray()),
             RawNmeaStatus::Error => Line::styled(sentence, Style::new().red()),
             RawNmeaStatus::Other => Line::styled(sentence, Style::new().light_blue()),
+            RawNmeaStatus::Unimplemented => Line::styled(sentence, Style::new().yellow()),
         }
     }
 }

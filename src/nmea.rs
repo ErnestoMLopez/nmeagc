@@ -9,6 +9,7 @@ pub struct RawNmeaLog {
 #[derive(Clone, Debug)]
 pub enum RawNmeaStatus {
     Gnss,
+    Unimplemented,
     Other,
     Error,
 }

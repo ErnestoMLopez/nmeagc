@@ -2,8 +2,9 @@ use crate::nmea::SolutionType;
 
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Gnss {
+    #[default]
     Gps,
     Glonass,
     Galileo,
@@ -11,8 +12,9 @@ pub enum Gnss {
     Other,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GpsSignal {
+    #[default]
     L1CA,
     L1C,
     L1P,
@@ -23,8 +25,9 @@ pub enum GpsSignal {
     L5IQ,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GlonassSignal {
+    #[default]
     L1OF,
     L1OC,
     L2OF,
@@ -32,10 +35,11 @@ pub enum GlonassSignal {
     L3OC,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GalileoSignal {
     E1B,
     E1C,
+    #[default]
     E1BC,
     E6B,
     E6C,
@@ -49,8 +53,9 @@ pub enum GalileoSignal {
     E5Q,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
 pub enum BeidouSignal {
+    #[default]
     B1I,
     B1Q,
     B1A,
@@ -72,6 +77,18 @@ pub enum GnssSignal {
     Beidou(BeidouSignal),
 }
 
+impl From<Gnss> for GnssSignal {
+    fn from(gnss: Gnss) -> Self {
+        match gnss {
+            Gnss::Gps => Self::Gps(GpsSignal::default()),
+            Gnss::Glonass => Self::Glonass(GlonassSignal::default()),
+            Gnss::Galileo => Self::Galileo(GalileoSignal::default()),
+            Gnss::Beidou => Self::Beidou(BeidouSignal::default()),
+            Gnss::Other => Self::Gps(GpsSignal::default()), // Default to GPS for unknown GNSS
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct SignalData {
     pub signal: GnssSignal,
@@ -85,7 +102,7 @@ pub struct SvData {
     /// GNSS constellation
     pub gnss: Gnss,
     /// Space vehicle ID
-    pub svid: u8,
+    pub svid: u32,
     /// Frequency channel number (for GLONASS)
     pub channel: Option<i8>,
     /// Signal data for the space vehicle

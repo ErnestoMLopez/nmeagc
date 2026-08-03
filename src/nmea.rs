@@ -1,4 +1,5 @@
 use crate::app::App;
+use crate::gnss::{Gnss, GnssSignal, SignalData, SvData};
 
 #[derive(Clone, Debug)]
 pub struct RawNmeaLog {
@@ -51,24 +52,55 @@ impl From<nmea::sentences::FixType> for SolutionType {
     }
 }
 
+impl From<nmea::sentences::GnssType> for Gnss {
+    fn from(source: nmea::sentences::GnssType) -> Self {
+        match source {
+            nmea::sentences::GnssType::Gps => Self::Gps,
+            nmea::sentences::GnssType::Glonass => Self::Glonass,
+            nmea::sentences::GnssType::Galileo => Self::Galileo,
+            nmea::sentences::GnssType::Beidou => Self::Beidou,
+            _ => Self::Other,
+        }
+    }
+}
+
 impl App {
     pub fn update_from_gga(&mut self) {
-        // self.nav_data.gnss = msg.source.into();
-        // self.nav_data.time = msg.timestamp;
-        // self.nav_data.solution_type = msg.quality.into();
-        // self.nav_data.svs_used = msg.satellite_count.unwrap_or_default();
-        // self.nav_data.latitude = msg.latitude;
-        // self.nav_data.longitude = msg.longitude;
-        // self.nav_data.altitude = msg.altitude;
-        // self.nav_data.geoid_separation = msg.geoid_separation;
-        // self.nav_data.differential_data_age = msg.age_of_dgps;
-        // self.nav_data.differential_ref_station_id = msg.ref_station_id;
+        // TODO
     }
 
     pub fn update_from_rmc(&mut self) {
-        // self.nav_data.gnss = msg.source.into();
-        // self.nav_data.time = msg.timestamp;
+        // TODO
+    }
 
-        // TODO: Completar implementación
+    pub fn update_from_gsv(&mut self) {
+        let nmea_data = self.nmea_data.lock().expect("mutex posioned");
+
+        let nmea_sv_data = nmea_data.satellites();
+        let sv_data = &mut self.sv_data;
+
+        // El llenado de la tabla de datos de satélites y de señales de cada satélite se hace a partir de los datos de
+        // las sentencias GSV, las cuales dan información solamente de los satélites, no de las señales en sí. Esto
+        // parece una copia inútil e ineficiente de información, pero está pensado para que la intefaz a la que acceda
+        // la UI sea lo más genérica posible, y permita su uso en clientes para mensajes propietarios que sí posean
+        // información adicional de cada señal.
+
+        sv_data.clear();
+        sv_data.extend(nmea_sv_data.iter().map(|satellite| {
+            let gnss: Gnss = satellite.gnss_type().into();
+            SvData {
+                gnss: gnss,
+                svid: satellite.prn(),
+                channel: None,
+                signals: vec![SignalData {
+                    signal: GnssSignal::from(gnss),
+                    cn0: satellite.snr().unwrap_or_default(),
+                    is_active: true,
+                    is_used: true,
+                }],
+                elevation: satellite.elevation(),
+                azimuth: satellite.azimuth(),
+            }
+        }));
     }
 }

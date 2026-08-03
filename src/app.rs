@@ -100,7 +100,7 @@ impl App {
             SentenceType::RMC => self.update_from_rmc(),
             SentenceType::GNS => {}
             SentenceType::GSA => {}
-            SentenceType::GSV => {}
+            SentenceType::GSV => self.update_from_gsv(),
             SentenceType::GLL => {}
             _ => {}
         }

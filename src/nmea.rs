@@ -1,7 +1,5 @@
 use crate::app::App;
-use crate::gnss::NavigationGnss;
-
-use nmea_parser::gnss::{GgaData, RmcData};
+use crate::gnss::{Gnss, GnssSignal, SignalData, SvData};
 
 #[derive(Clone, Debug)]
 pub struct RawNmeaLog {
@@ -12,8 +10,8 @@ pub struct RawNmeaLog {
 #[derive(Clone, Debug)]
 pub enum RawNmeaStatus {
     Gnss,
+    Unimplemented,
     Other,
-    Incomplete,
     Error,
 }
 
@@ -38,53 +36,71 @@ impl Default for SolutionType {
     }
 }
 
-impl From<nmea_parser::gnss::GgaQualityIndicator> for SolutionType {
-    fn from(source: nmea_parser::gnss::GgaQualityIndicator) -> Self {
+impl From<nmea::sentences::FixType> for SolutionType {
+    fn from(source: nmea::sentences::FixType) -> Self {
         match source {
-            nmea_parser::gnss::GgaQualityIndicator::Invalid => Self::Invalid,
-            nmea_parser::gnss::GgaQualityIndicator::GpsFix => Self::Sps3D,
-            nmea_parser::gnss::GgaQualityIndicator::DGpsFix => Self::Differential,
-            nmea_parser::gnss::GgaQualityIndicator::PpsFix => Self::Pps,
-            nmea_parser::gnss::GgaQualityIndicator::RealTimeKinematic => Self::RtkFixed,
-            nmea_parser::gnss::GgaQualityIndicator::RealTimeKinematicFloat => Self::RtkFloat,
-            nmea_parser::gnss::GgaQualityIndicator::DeadReckoning => Self::Extrapolated,
-            nmea_parser::gnss::GgaQualityIndicator::ManualInputMode => Self::Manual,
-            nmea_parser::gnss::GgaQualityIndicator::SimulationMode => Self::Simulated,
+            nmea::sentences::FixType::Invalid => Self::Invalid,
+            nmea::sentences::FixType::Gps => Self::Sps3D,
+            nmea::sentences::FixType::DGps => Self::Differential,
+            nmea::sentences::FixType::Pps => Self::Pps,
+            nmea::sentences::FixType::Rtk => Self::RtkFixed,
+            nmea::sentences::FixType::FloatRtk => Self::RtkFloat,
+            nmea::sentences::FixType::Estimated => Self::Extrapolated,
+            nmea::sentences::FixType::Manual => Self::Manual,
+            nmea::sentences::FixType::Simulation => Self::Simulated,
         }
     }
 }
 
-impl From<nmea_parser::gnss::NavigationSystem> for NavigationGnss {
-    fn from(source: nmea_parser::gnss::NavigationSystem) -> Self {
+impl From<nmea::sentences::GnssType> for Gnss {
+    fn from(source: nmea::sentences::GnssType) -> Self {
         match source {
-            nmea_parser::gnss::NavigationSystem::Combination => Self::Combined,
-            nmea_parser::gnss::NavigationSystem::Gps => Self::Gps,
-            nmea_parser::gnss::NavigationSystem::Galileo => Self::Galileo,
-            nmea_parser::gnss::NavigationSystem::Glonass => Self::Glonass,
-            nmea_parser::gnss::NavigationSystem::Beidou => Self::Beidou,
+            nmea::sentences::GnssType::Gps => Self::Gps,
+            nmea::sentences::GnssType::Glonass => Self::Glonass,
+            nmea::sentences::GnssType::Galileo => Self::Galileo,
+            nmea::sentences::GnssType::Beidou => Self::Beidou,
             _ => Self::Other,
         }
     }
 }
 
 impl App {
-    pub fn update_from_gga(&mut self, msg: &GgaData) {
-        self.nav_data.gnss = msg.source.into();
-        self.nav_data.time = msg.timestamp;
-        self.nav_data.solution_type = msg.quality.into();
-        self.nav_data.svs_used = msg.satellite_count.unwrap_or_default();
-        self.nav_data.latitude = msg.latitude;
-        self.nav_data.longitude = msg.longitude;
-        self.nav_data.altitude = msg.altitude;
-        self.nav_data.geoid_separation = msg.geoid_separation;
-        self.nav_data.differential_data_age = msg.age_of_dgps;
-        self.nav_data.differential_ref_station_id = msg.ref_station_id;
+    pub fn update_from_gga(&mut self) {
+        // TODO
     }
 
-    pub fn update_from_rmc(&mut self, msg: &RmcData) {
-        self.nav_data.gnss = msg.source.into();
-        self.nav_data.time = msg.timestamp;
+    pub fn update_from_rmc(&mut self) {
+        // TODO
+    }
 
-        // TODO: Completar implementación
+    pub fn update_from_gsv(&mut self) {
+        let nmea_data = self.nmea_data.lock().expect("mutex posioned");
+
+        let nmea_sv_data = nmea_data.satellites();
+        let sv_data = &mut self.sv_data;
+
+        // El llenado de la tabla de datos de satélites y de señales de cada satélite se hace a partir de los datos de
+        // las sentencias GSV, las cuales dan información solamente de los satélites, no de las señales en sí. Esto
+        // parece una copia inútil e ineficiente de información, pero está pensado para que la intefaz a la que acceda
+        // la UI sea lo más genérica posible, y permita su uso en clientes para mensajes propietarios que sí posean
+        // información adicional de cada señal.
+
+        sv_data.clear();
+        sv_data.extend(nmea_sv_data.iter().map(|satellite| {
+            let gnss: Gnss = satellite.gnss_type().into();
+            SvData {
+                gnss: gnss,
+                svid: satellite.prn(),
+                channel: None,
+                signals: vec![SignalData {
+                    signal: GnssSignal::from(gnss),
+                    cn0: satellite.snr().unwrap_or_default(),
+                    is_active: true,
+                    is_used: true,
+                }],
+                elevation: satellite.elevation(),
+                azimuth: satellite.azimuth(),
+            }
+        }));
     }
 }

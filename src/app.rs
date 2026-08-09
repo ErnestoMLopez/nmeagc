@@ -2,10 +2,12 @@ use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::RawNmeaLog;
 
+use std::sync::{Arc, Mutex};
+
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
 use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
-use nmea_parser::ParsedMessage;
+use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
 
@@ -27,25 +29,24 @@ pub struct App {
     pub sv_data: Vec<SvData>,
     /// Raw NMEA data logs.
     pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            running: true,
-            event_handler: EventHandler::new(),
-            tab: AppTab::default(),
-            nav_data: NavigationData::default(),
-            sv_data: Vec::new(),
-            raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
-        }
-    }
+    /// NMEA parser and data (shared between the event handler and the application).
+    pub nmea_data: Arc<Mutex<Nmea>>,
 }
 
 impl App {
     /// Constructs a new instance of [`App`].
     pub fn new() -> Self {
-        Self::default()
+        let nmea_parser = Arc::new(Mutex::new(Nmea::default()));
+
+        Self {
+            running: true,
+            event_handler: EventHandler::new(Arc::clone(&nmea_parser)),
+            tab: AppTab::default(),
+            nav_data: NavigationData::default(),
+            sv_data: Vec::new(),
+            raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
+            nmea_data: nmea_parser,
+        }
     }
 
     /// Run the application's main loop.
@@ -93,14 +94,14 @@ impl App {
         Ok(())
     }
 
-    fn handle_nmea_msg(&mut self, nmea_msg: Box<ParsedMessage>) -> Result<()> {
-        match *nmea_msg {
-            ParsedMessage::Gga(gga) => self.update_from_gga(&gga),
-            ParsedMessage::Rmc(rmc) => self.update_from_rmc(&rmc),
-            ParsedMessage::Gns(_) => {}
-            ParsedMessage::Gsa(_) => {}
-            ParsedMessage::Gsv(_) => {}
-            ParsedMessage::Gll(_) => {}
+    fn handle_nmea_msg(&mut self, nmea_msg: SentenceType) -> Result<()> {
+        match nmea_msg {
+            SentenceType::GGA => self.update_from_gga(),
+            SentenceType::RMC => self.update_from_rmc(),
+            SentenceType::GNS => {}
+            SentenceType::GSA => {}
+            SentenceType::GSV => self.update_from_gsv(),
+            SentenceType::GLL => {}
             _ => {}
         }
         Ok(())
@@ -126,7 +127,7 @@ pub enum AppEvent {
     /// Quit the application.
     Quit,
     /// NMEA message received.
-    NmeaMessage(Box<ParsedMessage>),
+    NmeaMessage(SentenceType),
     /// Raw NMEA sentence for raw data logging.
     RawNmeaSentence(RawNmeaLog),
 }

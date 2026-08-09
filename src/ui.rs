@@ -1,9 +1,11 @@
 use crate::app::{App, AppTab};
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
+use crate::widgets::skyplot::Skyplot;
 
 use ratatui::{
     Frame,
+    layout::Position,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     symbols::Marker,
@@ -51,7 +53,7 @@ fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(tabs, tabs_area);
 }
 
-fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
+fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let layout = Layout::horizontal([Constraint::Min(35), Constraint::Percentage(70)]);
     let [left_area, right_area] = area.layout(&layout);
 
@@ -65,7 +67,7 @@ fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
     let layout = Layout::vertical([Constraint::Max(15), Constraint::Min(20)]);
     let [tracking_area, lower_area] = right_area.layout(&layout);
 
-    let layout = Layout::horizontal([Constraint::Percentage(50), Constraint::Min(15)]);
+    let layout = Layout::horizontal([Constraint::Percentage(60), Constraint::Min(15)]);
     let [chartsplot_area, skyplot_area] = lower_area.layout(&layout);
 
     let time_block = Block::bordered().title("Time").style(THEME.borders);
@@ -120,12 +122,22 @@ fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
         .data(bars)
         .max(55);
 
+    let skyplot = Skyplot::new(vec![
+        (0.0, 0.0),
+        (30.0, 45.0),
+        (60.0, 30.0),
+        (90.0, 60.0),
+        (120.0, 15.0),
+        (150.0, 75.0),
+    ]);
+
     frame.render_widget(time_block, time_area);
     frame.render_widget(position_text, position_area);
     frame.render_widget(scatter_block, scatter_area);
     frame.render_widget(tracking_barchart, tracking_area);
     frame.render_widget(chartsplot_block, chartsplot_area);
     frame.render_widget(skyplot_block, skyplot_area);
+    frame.render_stateful_widget(skyplot, skyplot_area, &mut app.skyplot_state);
 }
 
 // TODO: Esto es solo un ejemplo basi para después reemplazar por un custom widget

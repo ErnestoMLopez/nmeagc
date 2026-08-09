@@ -7,7 +7,9 @@ use std::sync::{Arc, Mutex};
 
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
-use crossterm::event::{Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
+};
 use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
@@ -68,7 +70,7 @@ impl App {
             Event::Tick => self.tick(),
             Event::Crossterm(event) => match event {
                 CrosstermEvent::Key(key_event) => self.handle_key_event(key_event)?,
-                CrosstermEvent::Mouse(_) => {}
+                CrosstermEvent::Mouse(mouse_event) => self.handle_mouse_event(mouse_event)?,
                 _ => {}
             },
             Event::App(app_event) => match app_event {
@@ -93,6 +95,26 @@ impl App {
             KeyCode::Tab => self.tab.next(),
             KeyCode::Right => self.tab.next(),
             KeyCode::Left => self.tab.prev(),
+            _ => {}
+        }
+        Ok(())
+    }
+
+    /// Handles the mouse events and updates the state of [`App`].
+    fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> Result<()> {
+        match mouse_event.kind {
+            MouseEventKind::Down(_) => {
+                // Handle mouse click events here
+            }
+            MouseEventKind::Up(_) => {
+                // Handle mouse release events here
+            }
+            MouseEventKind::Drag(_) => {
+                // Handle mouse drag events here
+            }
+            MouseEventKind::Moved => {
+                // Handle mouse move events here
+            }
             _ => {}
         }
         Ok(())

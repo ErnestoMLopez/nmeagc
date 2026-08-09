@@ -52,18 +52,30 @@ fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
 }
 
 fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
-    let layout = Layout::horizontal([Constraint::Length(35), Constraint::Fill(1)]);
+    let layout = Layout::horizontal([Constraint::Min(35), Constraint::Percentage(70)]);
     let [left_area, right_area] = area.layout(&layout);
-    let layout = Layout::vertical([Constraint::Max(12), Constraint::Fill(1)]);
-    let [upper_area, lower_area] = right_area.layout(&layout);
 
-    let nav_area = left_area;
-    let cn0_area = upper_area;
-    let graphs_area = lower_area;
+    let layout = Layout::vertical([
+        Constraint::Max(4),
+        Constraint::Fill(1),
+        Constraint::Length(left_area.width / 2),
+    ]);
+    let [time_area, position_area, scatter_area] = left_area.layout(&layout);
 
-    let block_nav = Block::bordered().title("Navigation").style(THEME.borders);
-    let block_cn0 = Block::bordered().title("Tracking").style(THEME.borders);
-    let block_graphs = Block::bordered().title("Graphs").style(THEME.borders);
+    let layout = Layout::vertical([Constraint::Max(15), Constraint::Min(20)]);
+    let [tracking_area, lower_area] = right_area.layout(&layout);
+
+    let layout = Layout::horizontal([Constraint::Percentage(50), Constraint::Min(15)]);
+    let [chartsplot_area, skyplot_area] = lower_area.layout(&layout);
+
+    let time_block = Block::bordered().title("Time").style(THEME.borders);
+    let position_block = Block::bordered().title("Position").style(THEME.borders);
+    let scatter_block = Block::bordered().title("Scatter plot").style(THEME.borders);
+    let tracking_block = Block::bordered().title("Tracking").style(THEME.borders);
+    let chartsplot_block = Block::bordered()
+        .title("Position charts")
+        .style(THEME.borders);
+    let skyplot_block = Block::bordered().title("Skyplot").style(THEME.borders);
 
     let nmea_data = app.nmea_data.lock().expect("mutex poisoned");
 
@@ -88,7 +100,7 @@ fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
                 .unwrap_or("-".to_string())
         )),
     ];
-    let nav_text = Paragraph::new(lines).block(block_nav);
+    let position_text = Paragraph::new(lines).block(position_block);
 
     // TODO: Reemplazar por la obtención de datos del estado de la app
     // TODO: Modularizar creando widget que genere internamente el gráfico de barras por satélite y por señal de cada satélite
@@ -101,16 +113,19 @@ fn render_monitor_tab(app: &App, frame: &mut Frame, area: Rect) {
         ('R', 22, 48, true),
     ];
     let bars = create_bars(&data);
-    let barchart = BarChart::default()
-        .block(block_cn0)
+    let tracking_barchart = BarChart::default()
+        .block(tracking_block)
         .bar_width(3)
         .bar_style(Style::default().fg(Color::Cyan))
         .data(bars)
         .max(55);
 
-    frame.render_widget(nav_text, nav_area);
-    frame.render_widget(barchart, cn0_area);
-    frame.render_widget(block_graphs, graphs_area);
+    frame.render_widget(time_block, time_area);
+    frame.render_widget(position_text, position_area);
+    frame.render_widget(scatter_block, scatter_area);
+    frame.render_widget(tracking_barchart, tracking_area);
+    frame.render_widget(chartsplot_block, chartsplot_area);
+    frame.render_widget(skyplot_block, skyplot_area);
 }
 
 // TODO: Esto es solo un ejemplo basi para después reemplazar por un custom widget

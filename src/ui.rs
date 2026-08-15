@@ -1,7 +1,10 @@
 use crate::app::{App, AppTab};
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
-use crate::widgets::skyplot::Skyplot;
+use crate::widgets::{
+    signals_monitor::{SignalInfo, SignalsMonitor},
+    skyplot::Skyplot,
+};
 
 use ratatui::{
     Frame,
@@ -11,7 +14,7 @@ use ratatui::{
     symbols::Marker,
     text::{Line, Text},
     widgets::{
-        Bar, BarChart, BarGroup, Block, Paragraph, Tabs,
+        Block, Paragraph, Tabs,
         canvas::{Canvas, Circle, Map, MapResolution, Points, Rectangle},
     },
 };
@@ -65,7 +68,7 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let [time_area, position_area, scatter_area] = left_area.layout(&layout);
 
     let layout = Layout::vertical([Constraint::Max(15), Constraint::Min(20)]);
-    let [tracking_area, lower_area] = right_area.layout(&layout);
+    let [signals_monitor_area, lower_area] = right_area.layout(&layout);
 
     let layout = Layout::horizontal([Constraint::Percentage(60), Constraint::Min(15)]);
     let [chartsplot_area, skyplot_area] = lower_area.layout(&layout);
@@ -73,7 +76,6 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let time_block = Block::bordered().title("Time").style(THEME.borders);
     let position_block = Block::bordered().title("Position").style(THEME.borders);
     let scatter_block = Block::bordered().title("Scatter plot").style(THEME.borders);
-    let tracking_block = Block::bordered().title("Tracking").style(THEME.borders);
     let chartsplot_block = Block::bordered()
         .title("Position charts")
         .style(THEME.borders);
@@ -105,22 +107,7 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let position_text = Paragraph::new(lines).block(position_block);
 
     // TODO: Reemplazar por la obtención de datos del estado de la app
-    // TODO: Modularizar creando widget que genere internamente el gráfico de barras por satélite y por señal de cada satélite
-    let data = [
-        ('G', 01, 44, true),
-        ('G', 01, 32, true),
-        ('G', 24, 41, true),
-        ('E', 03, 38, true),
-        ('E', 36, 31, false),
-        ('R', 22, 48, true),
-    ];
-    let bars = create_bars(&data);
-    let tracking_barchart = BarChart::default()
-        .block(tracking_block)
-        .bar_width(3)
-        .bar_style(Style::default().fg(Color::Cyan))
-        .data(bars)
-        .max(55);
+    let signals_monitor = SignalsMonitor::new(SignalInfo::dummy());
 
     let skyplot = Skyplot::new(vec![
         (0.0, 0.0),
@@ -134,28 +121,10 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(time_block, time_area);
     frame.render_widget(position_text, position_area);
     frame.render_widget(scatter_block, scatter_area);
-    frame.render_widget(tracking_barchart, tracking_area);
+    frame.render_widget(signals_monitor, signals_monitor_area);
     frame.render_widget(chartsplot_block, chartsplot_area);
     frame.render_widget(skyplot_block, skyplot_area);
     frame.render_stateful_widget(skyplot, skyplot_area, &mut app.skyplot_state);
-}
-
-// TODO: Esto es solo un ejemplo basi para después reemplazar por un custom widget
-fn create_bars<'a>(data: &[(char, u8, u64, bool)]) -> BarGroup<'a> {
-    let bargroup = data
-        .iter()
-        .map(|(gnss, label, value, is_active)| {
-            Bar::default()
-                .value(*value)
-                .label(format!("{}{}", gnss, label))
-                .style(if *is_active {
-                    Style::default().fg(Color::Green)
-                } else {
-                    Style::default().fg(Color::Red)
-                })
-        })
-        .collect::<Vec<Bar>>();
-    BarGroup::new(bargroup)
 }
 
 fn render_map_tab(_app: &App, frame: &mut Frame, area: Rect) {

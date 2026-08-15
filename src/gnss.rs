@@ -69,12 +69,13 @@ pub enum BeidouSignal {
     B3A,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub enum GnssSignal {
     Gps(GpsSignal),
     Glonass(GlonassSignal),
     Galileo(GalileoSignal),
     Beidou(BeidouSignal),
+    Other,
 }
 
 impl From<Gnss> for GnssSignal {
@@ -84,7 +85,51 @@ impl From<Gnss> for GnssSignal {
             Gnss::Glonass => Self::Glonass(GlonassSignal::default()),
             Gnss::Galileo => Self::Galileo(GalileoSignal::default()),
             Gnss::Beidou => Self::Beidou(BeidouSignal::default()),
-            Gnss::Other => Self::Gps(GpsSignal::default()), // Default to GPS for unknown GNSS
+            Gnss::Other => Self::Other,
+        }
+    }
+}
+
+impl From<GnssSignal> for Gnss {
+    fn from(signal: GnssSignal) -> Self {
+        match signal {
+            GnssSignal::Gps(_) => Self::Gps,
+            GnssSignal::Glonass(_) => Self::Glonass,
+            GnssSignal::Galileo(_) => Self::Galileo,
+            GnssSignal::Beidou(_) => Self::Beidou,
+            GnssSignal::Other => Self::Other,
+        }
+    }
+}
+
+impl Gnss {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Gnss::Gps => "GPS",
+            Gnss::Glonass => "GLONASS",
+            Gnss::Galileo => "Galileo",
+            Gnss::Beidou => "BeiDou",
+            Gnss::Other => "Other",
+        }
+    }
+
+    pub const fn as_char(&self) -> char {
+        match self {
+            Gnss::Gps => 'G',
+            Gnss::Glonass => 'R',
+            Gnss::Galileo => 'E',
+            Gnss::Beidou => 'B',
+            Gnss::Other => '-',
+        }
+    }
+
+    pub const fn as_code_str(&self) -> &'static str {
+        match self {
+            Gnss::Gps => "GPS",
+            Gnss::Glonass => "GLO",
+            Gnss::Galileo => "GAL",
+            Gnss::Beidou => "BDS",
+            Gnss::Other => "---",
         }
     }
 }

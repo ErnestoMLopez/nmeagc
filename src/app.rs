@@ -170,7 +170,7 @@ impl AppTab {
     fn next(&mut self) {
         let current_index = *self as usize;
         let next_index = current_index.saturating_add(1);
-        *self = Self::from_repr(next_index).unwrap_or(*self)
+        *self = Self::from_repr(next_index).unwrap_or(Self::default())
     }
 
     fn prev(&mut self) {

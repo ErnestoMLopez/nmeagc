@@ -8,6 +8,7 @@ use ratatui::{
     text::Line,
     widgets::{Bar, BarChart, BarGroup, Block, Widget},
 };
+use std::collections::BTreeMap;
 
 struct SignalInfoSet(Vec<SignalInfo>);
 
@@ -36,10 +37,13 @@ impl SignalInfo {
         vec![
             SignalInfo::new(GnssSignal::Gps(GpsSignal::L1CA), 1, 44, true),
             SignalInfo::new(GnssSignal::Gps(GpsSignal::L2C), 1, 41, true),
+            SignalInfo::new(GnssSignal::Galileo(GalileoSignal::E1BC), 5, 29, false),
+            SignalInfo::new(GnssSignal::Galileo(GalileoSignal::E5AIQ), 5, 30, false),
+            SignalInfo::new(GnssSignal::Gps(GpsSignal::L1CA), 3, 48, true),
             SignalInfo::new(GnssSignal::Gps(GpsSignal::L1CA), 28, 39, true),
             SignalInfo::new(GnssSignal::Gps(GpsSignal::L2C), 28, 39, true),
-            SignalInfo::new(GnssSignal::Gps(GpsSignal::L1CA), 28, 32, false),
-            SignalInfo::new(GnssSignal::Gps(GpsSignal::L2C), 28, 30, false),
+            SignalInfo::new(GnssSignal::Gps(GpsSignal::L1C), 28, 32, false),
+            SignalInfo::new(GnssSignal::Gps(GpsSignal::L5IQ), 28, 30, false),
             SignalInfo::new(GnssSignal::Gps(GpsSignal::L1CA), 24, 41, true),
             SignalInfo::new(GnssSignal::Galileo(GalileoSignal::E1BC), 3, 38, true),
             SignalInfo::new(GnssSignal::Galileo(GalileoSignal::E1BC), 36, 31, false),
@@ -65,8 +69,8 @@ impl Widget for SignalsMonitor {
         let barchart = BarChart::grouped(self.signals)
             .block(block_barchart)
             .bar_style(Style::default().fg(Color::Cyan))
-            .bar_width(3)
-            .bar_gap(0)
+            .bar_width(4)
+            .bar_gap(1)
             .group_gap(1)
             .max(MAX_CN0);
 
@@ -76,61 +80,36 @@ impl Widget for SignalsMonitor {
 
 impl<'a> Into<Vec<BarGroup<'a>>> for SignalInfoSet {
     fn into(self) -> Vec<BarGroup<'a>> {
-        let gps_signals = self
-            .0
-            .iter()
-            .filter(|s| matches!(s.signal, GnssSignal::Gps(_)))
-            .map(|s| {
-                let gnss: Gnss = s.signal.into();
-                Bar::default()
-                    .value(s.cn0)
-                    .label(format!("{}{:02}", gnss.as_char(), s.svid))
-                    .style(if s.is_used {
-                        Style::default().fg(Color::Green)
-                    } else {
-                        Style::default().fg(Color::Red)
-                    })
-            })
-            .collect::<Vec<Bar>>();
+        let mut bar_groups: BTreeMap<(Gnss, u8), Vec<Bar>> = BTreeMap::new();
 
-        let glonass_signals = self
-            .0
-            .iter()
-            .filter(|s| matches!(s.signal, GnssSignal::Glonass(_)))
-            .map(|s| {
-                let gnss: Gnss = s.signal.into();
-                Bar::default()
-                    .value(s.cn0)
-                    .label(format!("{}{:02}", gnss.as_char(), s.svid))
-                    .style(if s.is_used {
-                        Style::default().fg(Color::Green)
-                    } else {
-                        Style::default().fg(Color::Red)
-                    })
-            })
-            .collect::<Vec<Bar>>();
+        for item in self.0 {
+            bar_groups
+                .entry((Gnss::from(item.signal), item.svid))
+                .or_insert(vec![])
+                .push(Bar::from(item));
+        }
 
-        let galileo_signals = self
-            .0
-            .iter()
-            .filter(|s| matches!(s.signal, GnssSignal::Galileo(_)))
-            .map(|s| {
-                let gnss: Gnss = s.signal.into();
-                Bar::default()
-                    .value(s.cn0)
-                    .label(format!("{}{:02}", gnss.as_char(), s.svid))
-                    .style(if s.is_used {
-                        Style::default().fg(Color::Green)
-                    } else {
-                        Style::default().fg(Color::Red)
-                    })
+        bar_groups
+            .into_iter()
+            .map(|(k, v)| {
+                BarGroup::with_label(
+                    Line::from(format!("{}{:02}", k.0.as_char(), k.1)).centered(),
+                    v,
+                )
             })
-            .collect::<Vec<Bar>>();
+            .collect()
+    }
+}
 
-        vec![
-            BarGroup::with_label(Line::from("GPS").centered(), gps_signals),
-            BarGroup::with_label(Line::from("GLO").centered(), glonass_signals),
-            BarGroup::with_label(Line::from("GAL").centered(), galileo_signals),
-        ]
+impl<'a> From<SignalInfo> for Bar<'a> {
+    fn from(signal_info: SignalInfo) -> Self {
+        Bar::default()
+            .value(signal_info.cn0)
+            .label(signal_info.signal.as_signal_code_str())
+            .style(if signal_info.is_used {
+                Style::default().fg(Color::Green)
+            } else {
+                Style::default().fg(Color::Red)
+            })
     }
 }

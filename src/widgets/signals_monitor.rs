@@ -80,21 +80,23 @@ impl Widget for SignalsMonitor {
 
 impl<'a> Into<Vec<BarGroup<'a>>> for SignalInfoSet {
     fn into(self) -> Vec<BarGroup<'a>> {
-        let mut bar_groups: BTreeMap<(Gnss, u8), Vec<Bar>> = BTreeMap::new();
+        let mut bars_per_sv: BTreeMap<(Gnss, u8), Vec<Bar>> = BTreeMap::new();
 
         for item in self.0 {
-            bar_groups
+            bars_per_sv
                 .entry((Gnss::from(item.signal), item.svid))
                 .or_insert(vec![])
                 .push(Bar::from(item));
         }
 
-        bar_groups
+        bars_per_sv
             .into_iter()
-            .map(|(k, v)| {
+            .map(|(sv, signal_bars)| {
                 BarGroup::with_label(
-                    Line::from(format!("{}{:02}", k.0.as_char(), k.1)).centered(),
-                    v,
+                    Line::from(format!("{}{:02}", sv.0.as_char(), sv.1))
+                        .centered()
+                        .style(Style::default().bold()),
+                    signal_bars,
                 )
             })
             .collect()

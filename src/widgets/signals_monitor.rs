@@ -63,11 +63,12 @@ impl SignalsMonitor {
 impl Widget for SignalsMonitor {
     fn render(self, area: Rect, buf: &mut Buffer) {
         const MAX_CN0: u64 = 55;
-        let block_barchart = Block::bordered()
-            .title("Signals monitor")
-            .style(THEME.borders);
         let barchart = BarChart::grouped(self.signals)
-            .block(block_barchart)
+            .block(
+                Block::bordered()
+                    .title("Signals monitor")
+                    .style(THEME.borders),
+            )
             .bar_style(Style::default().fg(Color::Cyan))
             .bar_width(4)
             .bar_gap(1)

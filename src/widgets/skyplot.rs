@@ -29,7 +29,7 @@ impl StatefulWidget for Skyplot {
 
         block.render(area, buf);
 
-        state.plot_area = Self::centered_square(inner_area);
+        state.plot_area = Self::top_centered_square(inner_area);
 
         if state.plot_area.width.min(state.plot_area.height) < 5 {
             Paragraph::new("Not enough space")
@@ -71,12 +71,12 @@ impl Skyplot {
         ctx.print(-1.0, 0.0, "W".green());
     }
 
-    fn centered_square(area: Rect) -> Rect {
+    fn top_centered_square(area: Rect) -> Rect {
         let width = area.width.min(area.height * 2);
         let height = width / 2;
         Rect {
             x: area.x + (area.width - width) / 2,
-            y: area.y + (area.height - height) / 2,
+            y: area.y,
             width,
             height,
         }

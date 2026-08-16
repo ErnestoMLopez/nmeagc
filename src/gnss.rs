@@ -1,8 +1,9 @@
 use crate::nmea::SolutionType;
 
 use chrono::{DateTime, Utc};
+use strum::IntoStaticStr;
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Gnss {
     #[default]
     Gps,
@@ -12,7 +13,7 @@ pub enum Gnss {
     Other,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, IntoStaticStr)]
 pub enum GpsSignal {
     #[default]
     L1CA,
@@ -25,7 +26,7 @@ pub enum GpsSignal {
     L5IQ,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, IntoStaticStr)]
 pub enum GlonassSignal {
     #[default]
     L1OF,
@@ -35,7 +36,7 @@ pub enum GlonassSignal {
     L3OC,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, IntoStaticStr)]
 pub enum GalileoSignal {
     E1B,
     E1C,
@@ -53,7 +54,7 @@ pub enum GalileoSignal {
     E5Q,
 }
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, Hash, IntoStaticStr)]
 pub enum BeidouSignal {
     #[default]
     B1I,
@@ -69,7 +70,7 @@ pub enum BeidouSignal {
     B3A,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum GnssSignal {
     Gps(GpsSignal),
     Glonass(GlonassSignal),
@@ -130,6 +131,18 @@ impl Gnss {
             Gnss::Galileo => "GAL",
             Gnss::Beidou => "BDS",
             Gnss::Other => "---",
+        }
+    }
+}
+
+impl GnssSignal {
+    pub fn as_signal_code_str(&self) -> &'static str {
+        match self {
+            GnssSignal::Gps(signal) => signal.into(),
+            GnssSignal::Glonass(signal) => signal.into(),
+            GnssSignal::Galileo(signal) => signal.into(),
+            GnssSignal::Beidou(signal) => signal.into(),
+            GnssSignal::Other => "UNK",
         }
     }
 }

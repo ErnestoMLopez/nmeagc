@@ -127,13 +127,17 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_stateful_widget(skyplot, skyplot_area, &mut app.skyplot_state);
 }
 
-fn render_map_tab(_app: &App, frame: &mut Frame, area: Rect) {
+fn render_map_tab(app: &App, frame: &mut Frame, area: Rect) {
     let layout = Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]);
     let [nav_area, map_area] = area.layout(&layout);
 
     let block = Block::bordered().title("Navigation").style(THEME.borders);
 
-    // TODO: Reemplazar por la obtención de datos de la estructura de estado de la app
+    let coordinates = {
+        let nmea_parser = app.nmea_data.lock().expect("mutex poisoned");
+        nmea_parser.longitude.zip(nmea_parser.latitude)
+    };
+
     let map = Canvas::default()
         .block(Block::bordered().title("Worldmap").style(THEME.borders))
         .background_color(THEME.root.bg.unwrap_or(Color::Reset))
@@ -141,29 +145,30 @@ fn render_map_tab(_app: &App, frame: &mut Frame, area: Rect) {
         .x_bounds([-180.0, 180.0])
         .y_bounds([-90.0, 90.0])
         .paint(|ctx| {
-            let coordinates = (-57.942, -34.906);
             ctx.draw(&Map {
                 color: Color::White,
                 resolution: MapResolution::High,
             });
             ctx.layer();
-            ctx.draw(&Rectangle {
-                x: coordinates.0,
-                y: coordinates.1,
-                width: 1.0,
-                height: 1.0,
-                color: Color::Yellow,
-            });
-            ctx.draw(&Points {
-                coords: &[(coordinates)],
-                color: Color::LightRed,
-            });
-            ctx.draw(&Circle {
-                x: coordinates.0,
-                y: coordinates.1,
-                radius: 10.0,
-                color: Color::Green,
-            });
+            if let Some((lon, lat)) = coordinates {
+                ctx.draw(&Rectangle {
+                    x: lon,
+                    y: lat,
+                    width: 1.0,
+                    height: 1.0,
+                    color: Color::Yellow,
+                });
+                ctx.draw(&Points {
+                    coords: &[(lon, lat)],
+                    color: Color::LightRed,
+                });
+                ctx.draw(&Circle {
+                    x: lon,
+                    y: lat,
+                    radius: 10.0,
+                    color: Color::Green,
+                });
+            }
         });
 
     frame.render_widget(block, nav_area);

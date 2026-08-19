@@ -1,3 +1,5 @@
+use std::{io, panic};
+
 use color_eyre::Result;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
@@ -12,9 +14,9 @@ pub fn init() -> Result<DefaultTerminal> {
     set_panic_hook()?;
 
     crossterm::terminal::enable_raw_mode()?;
-    crossterm::execute!(std::io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
+    crossterm::execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
 
-    let backend = CrosstermBackend::new(std::io::stdout());
+    let backend = CrosstermBackend::new(io::stdout());
     let mut terminal = Terminal::new(backend)?;
 
     terminal.hide_cursor()?;
@@ -25,18 +27,18 @@ pub fn init() -> Result<DefaultTerminal> {
 
 /// Resets the terminal interface.
 ///
-/// This function is also used for the panic hook to revert the terminal properties if
-/// unexpected errors occur.
+/// This function is also used for the panic hook to revert the terminal properties if unexpected
+/// errors occur.
 pub fn reset() -> Result<()> {
-    crossterm::execute!(std::io::stdout(), DisableMouseCapture, LeaveAlternateScreen)?;
+    crossterm::execute!(io::stdout(), DisableMouseCapture, LeaveAlternateScreen)?;
     crossterm::terminal::disable_raw_mode()?;
     Ok(())
 }
 
 /// Set panic hook to reset the terminal interface on panic.
 fn set_panic_hook() -> Result<()> {
-    let panic_hook = std::panic::take_hook();
-    std::panic::set_hook(Box::new(move |panic| {
+    let panic_hook = panic::take_hook();
+    panic::set_hook(Box::new(move |panic| {
         reset().expect("failed to reset the terminal");
         panic_hook(panic);
     }));

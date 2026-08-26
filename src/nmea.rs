@@ -165,13 +165,12 @@ fn run_nmea_handler<R: BufRead>(
             _ => {
                 let sentence = line.strip_suffix("\r\n").unwrap_or(line.as_str());
 
-                let raw_status: RawNmeaStatus;
-
                 let mut nmea_parser = parser.lock().expect("mutex poisoned");
 
-                match nmea_parser.parse(sentence) {
+                let raw_status = match nmea_parser.parse(sentence) {
                     Ok(sentence_type) => {
-                        raw_status = match sentence_type {
+                        actor.send(Event::App(AppEvent::NmeaMessage(sentence_type)));
+                        match sentence_type {
                             SentenceType::GGA
                             | SentenceType::RMC
                             | SentenceType::GNS
@@ -179,15 +178,13 @@ fn run_nmea_handler<R: BufRead>(
                             | SentenceType::GSV
                             | SentenceType::GLL => RawNmeaStatus::Gnss,
                             _ => RawNmeaStatus::Other,
-                        };
-
-                        actor.send(Event::App(AppEvent::NmeaMessage(sentence_type)));
+                        }
                     }
                     Err(err) => {
                         // Atajamos los casos que nos interesarían, pero como no son soportados por
                         // la librería nmea, los marcamos como tales, dejando a todos los demás no
                         // categorizados.
-                        raw_status = match err {
+                        match err {
                             nmea::Error::Unsupported(SentenceType::GST) => {
                                 RawNmeaStatus::Unimplemented
                             }
@@ -195,7 +192,7 @@ fn run_nmea_handler<R: BufRead>(
                             _ => RawNmeaStatus::Error,
                         }
                     }
-                }
+                };
 
                 let nmea_log = RawNmeaLog {
                     sentence: sentence.to_string(),

@@ -119,7 +119,7 @@ impl App {
 
 /// Creates an event runner which handles the conection, reception and parsing of NMEA data.
 ///
-/// This function emits NMEA events.
+/// The parsing and event generation is done in a thread loop.
 pub fn setup_runner(event_handler: &EventHandler) -> Result<Arc<Mutex<Nmea>>> {
     // Opening the serial port to listen for NMEA data
     // TODO: Specify port configuration from CLI arguments or from initial dialog box
@@ -181,9 +181,8 @@ fn run_nmea_handler<R: BufRead>(
                         }
                     }
                     Err(err) => {
-                        // Atajamos los casos que nos interesarían, pero como no son soportados por
-                        // la librería nmea, los marcamos como tales, dejando a todos los demás no
-                        // categorizados.
+                        // Atajamos las sentencias que nos interesarían pero no son soportados por
+                        // la crate nmea. Los marcamos como tales, y al resto como no importantes.
                         match err {
                             nmea::Error::Unsupported(SentenceType::GST) => {
                                 RawNmeaStatus::Unimplemented

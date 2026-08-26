@@ -40,19 +40,20 @@ pub struct App {
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new() -> Self {
-        let nmea_parser = Arc::new(Mutex::new(Nmea::default()));
+    pub fn new() -> Result<Self> {
+        let event_handler = EventHandler::new();
+        let nmea_reader = crate::nmea::setup_runner(&event_handler)?;
 
-        Self {
+        Ok(Self {
             running: true,
-            event_handler: EventHandler::new(Arc::clone(&nmea_parser)),
+            event_handler: event_handler,
             tab: AppTab::default(),
             nav_data: NavigationData::default(),
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
-            nmea_data: nmea_parser,
+            nmea_data: nmea_reader,
             skyplot_state: SkyplotState::default(),
-        }
+        })
     }
 
     /// Run the application's main loop.

@@ -11,7 +11,7 @@ use ratatui::{DefaultTerminal, Terminal, backend::CrosstermBackend};
 ///
 /// It enables the raw mode and sets terminal properties.
 pub fn init() -> Result<DefaultTerminal> {
-    set_panic_hook()?;
+    set_panic_hook();
 
     crossterm::terminal::enable_raw_mode()?;
     crossterm::execute!(io::stdout(), EnterAlternateScreen, EnableMouseCapture)?;
@@ -36,11 +36,10 @@ pub fn reset() -> Result<()> {
 }
 
 /// Set panic hook to reset the terminal interface on panic.
-fn set_panic_hook() -> Result<()> {
+fn set_panic_hook() {
     let panic_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic| {
         reset().expect("failed to reset the terminal");
         panic_hook(panic);
     }));
-    Ok(())
 }

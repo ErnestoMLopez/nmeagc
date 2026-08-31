@@ -12,7 +12,9 @@ pub mod widgets;
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
     let terminal = terminal::init()?;
-    let result = App::new()?.run(terminal);
+    let mut app = App::new();
+    app.setup_reader()?;
+    let result = app.run(terminal);
     terminal::reset()?;
     result
 }

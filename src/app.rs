@@ -1,17 +1,24 @@
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
-use crate::nmea::RawNmeaLog;
+use crate::nmea::{RawNmeaLog, run_nmea_handler};
 use crate::widgets::skyplot::SkyplotState;
 
-use std::sync::{Arc, Mutex};
+use std::{
+    io::BufReader,
+    sync::{Arc, Mutex},
+    thread,
+    time::Duration,
+};
 
 use circular_buffer::FixedCircularBuffer;
-use color_eyre::Result;
+use color_eyre::eyre::Ok;
+use color_eyre::{Result, eyre::WrapErr};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
 use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
+use serialport::{DataBits, FlowControl, Parity, StopBits};
 use strum::{Display, EnumIter, FromRepr};
 
 /// Maximum amount of NMEA sentences to store and render in the raw data tab
@@ -40,20 +47,47 @@ pub struct App {
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Self {
         let event_handler = EventHandler::new();
-        let nmea_reader = crate::nmea::setup_runner(&event_handler)?;
 
-        Ok(Self {
+        Self {
             running: true,
             event_handler: event_handler,
             tab: AppTab::default(),
             nav_data: NavigationData::default(),
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
-            nmea_data: nmea_reader,
+            nmea_data: Arc::new(Mutex::new(Nmea::default())),
             skyplot_state: SkyplotState::default(),
-        })
+        }
+    }
+
+    /// Setup a reader to receive NMEA data
+    ///
+    /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
+    /// parsing and event generation is done in a thread loop.
+    pub fn setup_reader(&mut self) -> Result<()> {
+        // Opening the serial port to listen for NMEA data
+        // TODO: Specify port configuration from CLI arguments or from initial dialog box
+        // TODO: Pass port configuration from the application main thread
+        // TODO: Support for reading NMEA data from file (the use of BufReader simplifies this)
+        let port = serialport::new("/tmp/ttyV1", 4800)
+            .data_bits(DataBits::Eight)
+            .flow_control(FlowControl::None)
+            .parity(Parity::None)
+            .stop_bits(StopBits::One)
+            .exclusive(false)
+            .timeout(Duration::MAX)
+            .open()
+            .wrap_err("Error opening serial port")?;
+
+        let reader = BufReader::new(port);
+        let handler = self.event_handler.create_actor();
+        let parser = Arc::clone(&self.nmea_data);
+
+        thread::spawn(move || run_nmea_handler(handler, reader, parser));
+
+        Ok(())
     }
 
     /// Run the application's main loop.

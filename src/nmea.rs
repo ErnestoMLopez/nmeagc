@@ -1,17 +1,14 @@
 use crate::app::{App, AppEvent};
-use crate::event::{Event, EventHandler, EventThread};
+use crate::event::{Event, EventThread};
 use crate::gnss::{Gnss, GnssSignal, SignalData, SvData};
 
 use std::{
-    io::{BufRead, BufReader},
+    io::BufRead,
     sync::{Arc, Mutex},
-    thread,
-    time::Duration,
 };
 
 use color_eyre::{Result, eyre::WrapErr};
 use nmea::{Nmea, SentenceType};
-use serialport::{DataBits, FlowControl, Parity, StopBits};
 
 #[derive(Clone, Debug)]
 pub struct RawNmeaLog {
@@ -117,41 +114,10 @@ impl App {
     }
 }
 
-/// Creates an event runner which handles the conection, reception and parsing of NMEA data.
-///
-/// The parsing and event generation is done in a thread loop.
-pub fn setup_runner(event_handler: &EventHandler) -> Result<Arc<Mutex<Nmea>>> {
-    // Opening the serial port to listen for NMEA data
-    // TODO: Specify port configuration from CLI arguments or from initial dialog box
-    // TODO: Pass port configuration from the application main thread
-    // TODO: Support for reading NMEA data from file (the use of BufReader simplifies this)
-    let port = serialport::new("/tmp/ttyV1", 4800)
-        .data_bits(DataBits::Eight)
-        .flow_control(FlowControl::None)
-        .parity(Parity::None)
-        .stop_bits(StopBits::One)
-        .exclusive(false)
-        .timeout(Duration::MAX)
-        .open()
-        .wrap_err("Error opening serial port")?;
-
-    let reader = BufReader::new(port);
-
-    let nmea_handler = event_handler.create_actor();
-
-    // Creating instance of the NMEA parser/reader
-    let nmea_parser = Arc::new(Mutex::new(Nmea::default()));
-    let nmea_reader = Arc::clone(&nmea_parser);
-
-    thread::spawn(move || run_nmea_handler(nmea_handler, reader, nmea_parser));
-
-    Ok(nmea_reader)
-}
-
 /// Runs the NMEA event thread.
 ///
 /// This function emits NMEA events.
-fn run_nmea_handler<R: BufRead>(
+pub fn run_nmea_handler<R: BufRead>(
     actor: EventThread,
     mut reader: R,
     parser: Arc<Mutex<Nmea>>,

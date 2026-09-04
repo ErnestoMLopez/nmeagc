@@ -1,9 +1,10 @@
 use crate::app::{App, AppTab};
+use crate::gnss::Gnss;
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
 use crate::widgets::{
     signals_monitor::{SignalInfo, SignalsMonitor},
-    skyplot::Skyplot,
+    skyplot::{Skyplot, SkyplotSatellite},
 };
 
 use ratatui::{
@@ -109,12 +110,46 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let signals_monitor = SignalsMonitor::new(SignalInfo::dummy());
 
     let skyplot = Skyplot::new(vec![
-        (0.0, 0.0),
-        (30.0, 45.0),
-        (60.0, 30.0),
-        (90.0, 60.0),
-        (120.0, 15.0),
-        (150.0, 75.0),
+        SkyplotSatellite {
+            gnss: Gnss::Gps,
+            elevation: 90.0,
+            azimuth: 0.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Gps,
+            elevation: 45.0,
+            azimuth: 45.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Gps,
+            elevation: 20.0,
+            azimuth: 300.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Galileo,
+            elevation: 80.0,
+            azimuth: 160.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Galileo,
+            elevation: 10.0,
+            azimuth: 110.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Glonass,
+            elevation: 70.0,
+            azimuth: 95.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Beidou,
+            elevation: 15.0,
+            azimuth: 320.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Beidou,
+            elevation: 5.0,
+            azimuth: 350.0,
+        },
     ]);
 
     frame.render_widget(time_block, time_area);

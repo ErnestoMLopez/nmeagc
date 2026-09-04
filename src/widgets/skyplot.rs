@@ -1,5 +1,5 @@
+use crate::gnss::Gnss;
 use crate::theme::THEME;
-
 use ratatui::{
     buffer::Buffer,
     layout::Rect,
@@ -7,12 +7,18 @@ use ratatui::{
     symbols::Marker,
     widgets::{
         Block, Paragraph, StatefulWidget, Widget, Wrap,
-        canvas::{Canvas, Circle, Context, Line},
+        canvas::{Canvas, Circle, Context, Line, Shape},
     },
 };
 
 pub struct Skyplot {
-    pub satellites: Vec<(f64, f64)>,
+    pub satellites: Vec<SkyplotSatellite>,
+}
+
+pub struct SkyplotSatellite {
+    pub gnss: Gnss,
+    pub elevation: f64,
+    pub azimuth: f64,
 }
 
 #[derive(Debug, Clone, Copy, Default)]
@@ -47,7 +53,7 @@ impl StatefulWidget for Skyplot {
             .paint(|ctx| {
                 Self::draw_grid(ctx);
                 ctx.layer();
-                // self.draw_sky_track(ctx, &self.shared.ground_station.as_ref().unwrap().position);
+                self.draw_satellites(ctx);
             });
 
         skyplot.render(state.plot_area, buf);
@@ -55,7 +61,7 @@ impl StatefulWidget for Skyplot {
 }
 
 impl Skyplot {
-    pub fn new(satellites: Vec<(f64, f64)>) -> Self {
+    pub fn new(satellites: Vec<SkyplotSatellite>) -> Self {
         Self { satellites }
     }
 
@@ -71,6 +77,37 @@ impl Skyplot {
         ctx.print(-1.0, 0.0, "W".green());
     }
 
+    fn draw_satellites(&self, ctx: &mut Context) {
+        ctx.marker(Marker::from(Gnss::Gps));
+        self.satellites
+            .iter()
+            .filter(|sv| sv.gnss == Gnss::Gps)
+            .for_each(|sv| {
+                ctx.draw(sv);
+            });
+        ctx.marker(Marker::from(Gnss::Galileo));
+        self.satellites
+            .iter()
+            .filter(|sv| sv.gnss == Gnss::Galileo)
+            .for_each(|sv| {
+                ctx.draw(sv);
+            });
+        ctx.marker(Marker::from(Gnss::Glonass));
+        self.satellites
+            .iter()
+            .filter(|sv| sv.gnss == Gnss::Glonass)
+            .for_each(|sv| {
+                ctx.draw(sv);
+            });
+        ctx.marker(Marker::from(Gnss::Beidou));
+        self.satellites
+            .iter()
+            .filter(|sv| sv.gnss == Gnss::Beidou)
+            .for_each(|sv| {
+                ctx.draw(sv);
+            });
+    }
+
     fn top_centered_square(area: Rect) -> Rect {
         let width = area.width.min(area.height * 2);
         let height = width / 2;
@@ -79,6 +116,45 @@ impl Skyplot {
             y: area.y,
             width,
             height,
+        }
+    }
+}
+
+impl Shape for SkyplotSatellite {
+    fn draw(&self, painter: &mut ratatui::widgets::canvas::Painter) {
+        let elevation_rad = self.elevation.to_radians();
+        let azimuth_rad = self.azimuth.to_radians();
+
+        let radius = 1.0 - (elevation_rad / std::f64::consts::FRAC_PI_2);
+        let x = radius * azimuth_rad.sin();
+        let y = radius * azimuth_rad.cos();
+
+        if let Some((x, y)) = painter.get_point(x, y) {
+            painter.paint(x, y, Color::from(self.gnss));
+        }
+    }
+}
+
+impl From<Gnss> for Marker {
+    fn from(gnss: Gnss) -> Self {
+        match gnss {
+            Gnss::Gps => Marker::Dot,
+            Gnss::Galileo => Marker::Bar,
+            Gnss::Glonass => Marker::Quadrant,
+            Gnss::Beidou => Marker::Octant,
+            Gnss::Other => Marker::Custom('*'),
+        }
+    }
+}
+
+impl From<Gnss> for Color {
+    fn from(gnss: Gnss) -> Self {
+        match gnss {
+            Gnss::Gps => Color::Cyan,
+            Gnss::Galileo => Color::Blue,
+            Gnss::Glonass => Color::Red,
+            Gnss::Beidou => Color::Yellow,
+            Gnss::Other => Color::Gray,
         }
     }
 }

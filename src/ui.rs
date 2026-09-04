@@ -8,7 +8,6 @@ use crate::widgets::{
 
 use ratatui::{
     Frame,
-    layout::Position,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     symbols::Marker,

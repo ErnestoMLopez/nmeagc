@@ -78,34 +78,17 @@ impl Skyplot {
     }
 
     fn draw_satellites(&self, ctx: &mut Context) {
-        ctx.marker(Marker::from(Gnss::Gps));
-        self.satellites
-            .iter()
-            .filter(|sv| sv.gnss == Gnss::Gps)
-            .for_each(|sv| {
-                ctx.draw(sv);
-            });
-        ctx.marker(Marker::from(Gnss::Galileo));
-        self.satellites
-            .iter()
-            .filter(|sv| sv.gnss == Gnss::Galileo)
-            .for_each(|sv| {
-                ctx.draw(sv);
-            });
-        ctx.marker(Marker::from(Gnss::Glonass));
-        self.satellites
-            .iter()
-            .filter(|sv| sv.gnss == Gnss::Glonass)
-            .for_each(|sv| {
-                ctx.draw(sv);
-            });
-        ctx.marker(Marker::from(Gnss::Beidou));
-        self.satellites
-            .iter()
-            .filter(|sv| sv.gnss == Gnss::Beidou)
-            .for_each(|sv| {
-                ctx.draw(sv);
-            });
+        const GNSSS: [Gnss; 4] = [Gnss::Gps, Gnss::Galileo, Gnss::Glonass, Gnss::Beidou];
+
+        for gnss in GNSSS {
+            ctx.marker(Marker::from(gnss));
+            self.satellites
+                .iter()
+                .filter(|sv| sv.gnss == gnss)
+                .for_each(|sv| {
+                    ctx.draw(sv);
+                });
+        }
     }
 
     fn top_centered_square(area: Rect) -> Rect {

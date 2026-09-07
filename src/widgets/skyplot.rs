@@ -78,16 +78,9 @@ impl Skyplot {
     }
 
     fn draw_satellites(&self, ctx: &mut Context) {
-        const GNSSS: [Gnss; 4] = [Gnss::Gps, Gnss::Galileo, Gnss::Glonass, Gnss::Beidou];
-
-        for gnss in GNSSS {
-            ctx.marker(Marker::from(gnss));
-            self.satellites
-                .iter()
-                .filter(|sv| sv.gnss == gnss)
-                .for_each(|sv| {
-                    ctx.draw(sv);
-                });
+        ctx.marker(Marker::HalfBlock);
+        for sv in self.satellites.iter() {
+            ctx.draw(sv);
         }
     }
 
@@ -114,18 +107,6 @@ impl Shape for SkyplotSatellite {
 
         if let Some((x, y)) = painter.get_point(x, y) {
             painter.paint(x, y, Color::from(self.gnss));
-        }
-    }
-}
-
-impl From<Gnss> for Marker {
-    fn from(gnss: Gnss) -> Self {
-        match gnss {
-            Gnss::Gps => Marker::Dot,
-            Gnss::Galileo => Marker::Bar,
-            Gnss::Glonass => Marker::Quadrant,
-            Gnss::Beidou => Marker::Octant,
-            Gnss::Other => Marker::Custom('*'),
         }
     }
 }

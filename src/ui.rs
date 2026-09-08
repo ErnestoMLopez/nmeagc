@@ -95,7 +95,6 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let chartsplot_block = Block::bordered()
         .title("Position charts")
         .style(THEME.borders);
-    let skyplot_block = Block::bordered().title("Skyplot").style(THEME.borders);
 
     let nmea_data = app.nmea_data.lock().expect("mutex poisoned");
 
@@ -174,7 +173,6 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(scatter_block, scatter_area);
     frame.render_widget(signals_monitor, signals_monitor_area);
     frame.render_widget(chartsplot_block, chartsplot_area);
-    frame.render_widget(skyplot_block, skyplot_area);
     frame.render_stateful_widget(skyplot, skyplot_area, &mut app.skyplot_state);
 }
 

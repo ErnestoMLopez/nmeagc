@@ -28,6 +28,8 @@ const MAX_RAW_NMEA_LOGS: usize = 1000;
 pub struct App {
     /// Indicates if the application is running.
     pub running: bool,
+    /// Last recorded mouse position (for hovering detection)
+    pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
     pub event_handler: EventHandler,
     /// Current tab.
@@ -49,6 +51,7 @@ impl App {
     pub fn new() -> Self {
         Self {
             running: true,
+            mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
             nav_data: NavigationData::default(),
@@ -146,7 +149,7 @@ impl App {
                 // Handle mouse drag events here
             }
             MouseEventKind::Moved => {
-                // Handle mouse move events here
+                self.mouse_position = Some((mouse_event.column, mouse_event.row))
             }
             _ => {}
         }

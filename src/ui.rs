@@ -9,8 +9,8 @@ use crate::widgets::{
 
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Style},
+    layout::{Constraint, HorizontalAlignment, Layout, Rect},
+    style::{Color, Style, Stylize},
     symbols::Marker,
     text::{Line, Text},
     widgets::{
@@ -25,10 +25,15 @@ impl App {
         let screen = Block::new().style(THEME.root);
         frame.render_widget(screen, frame.area());
 
-        let layout = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]);
-        let [titlebar_area, tabcontent_area] = frame.area().layout(&layout);
+        let layout = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ]);
+        let [titlebar_area, tabcontent_area, footer_area] = frame.area().layout(&layout);
 
         render_tabs_title(self, frame, titlebar_area);
+        render_footer(self, frame, footer_area);
 
         match self.tab {
             AppTab::Monitor => render_monitor_tab(self, frame, tabcontent_area),
@@ -54,6 +59,17 @@ fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
 
     frame.render_widget(title, title_area);
     frame.render_widget(tabs, tabs_area);
+}
+
+fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
+    let mouse = app.mouse_position.map_or_else(
+        || "Mouse at: (-,-)".to_string(),
+        |position| format!("Mouse at: {:?}", position),
+    );
+    let debug_data = Paragraph::new(mouse)
+        .alignment(HorizontalAlignment::Right)
+        .bg(Color::Black);
+    frame.render_widget(debug_data, area);
 }
 
 fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {

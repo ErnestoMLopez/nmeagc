@@ -27,6 +27,18 @@ pub struct SkyplotState {
     pub plot_area: Rect,
 }
 
+struct PlotableSv {
+    color: Color,
+    x: f64,
+    y: f64,
+}
+
+impl PlotableSv {
+    fn new(color: Color, x: f64, y: f64) -> Self {
+        PlotableSv { color, x, y }
+    }
+}
+
 impl<'a> StatefulWidget for Skyplot<'a> {
     type State = SkyplotState;
 
@@ -45,6 +57,22 @@ impl<'a> StatefulWidget for Skyplot<'a> {
             return;
         }
 
+        // Convert satellites to the plotable elements representing them. This step allows detection
+        // of mouse hovering to display its info.
+        let svs: Vec<_> = self
+            .satellites
+            .iter()
+            .map(|satellite| {
+                let elevation_rad = satellite.elevation.to_radians();
+                let azimuth_rad = satellite.azimuth.to_radians();
+                let radius = 1.0 - (elevation_rad / std::f64::consts::FRAC_PI_2);
+                let x = radius * azimuth_rad.sin();
+                let y = radius * azimuth_rad.cos();
+
+                PlotableSv::new(Color::from(satellite.gnss), x, y)
+            })
+            .collect();
+
         let skyplot = Canvas::default()
             .background_color(THEME.root.bg.unwrap_or(Color::Reset))
             .marker(Marker::Braille)
@@ -53,7 +81,7 @@ impl<'a> StatefulWidget for Skyplot<'a> {
             .paint(|ctx| {
                 Self::draw_grid(ctx);
                 ctx.layer();
-                self.draw_satellites(ctx);
+                self.draw_svs(ctx, &svs);
             });
 
         skyplot.render(state.plot_area, buf);
@@ -87,9 +115,9 @@ impl<'a> Skyplot<'a> {
         ctx.print(-1.0, 0.0, "W".green());
     }
 
-    fn draw_satellites(&self, ctx: &mut Context) {
+    fn draw_svs(&self, ctx: &mut Context, svs: &[PlotableSv]) {
         ctx.marker(Marker::HalfBlock);
-        for sv in self.satellites.iter() {
+        for sv in svs.iter() {
             ctx.draw(sv);
         }
     }
@@ -106,17 +134,10 @@ impl<'a> Skyplot<'a> {
     }
 }
 
-impl Shape for SkyplotSatellite {
+impl Shape for PlotableSv {
     fn draw(&self, painter: &mut ratatui::widgets::canvas::Painter) {
-        let elevation_rad = self.elevation.to_radians();
-        let azimuth_rad = self.azimuth.to_radians();
-
-        let radius = 1.0 - (elevation_rad / std::f64::consts::FRAC_PI_2);
-        let x = radius * azimuth_rad.sin();
-        let y = radius * azimuth_rad.cos();
-
-        if let Some((x, y)) = painter.get_point(x, y) {
-            painter.paint(x, y, Color::from(self.gnss));
+        if let Some((x, y)) = painter.get_point(self.x, self.y) {
+            painter.paint(x, y, self.color);
         }
     }
 }

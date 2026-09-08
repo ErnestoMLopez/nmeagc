@@ -81,7 +81,7 @@ impl<'a> StatefulWidget for Skyplot<'a> {
             .paint(|ctx| {
                 Self::draw_grid(ctx);
                 ctx.layer();
-                self.draw_svs(ctx, &svs);
+                Self::draw_svs(ctx, &svs);
             });
 
         skyplot.render(state.plot_area, buf);
@@ -115,7 +115,7 @@ impl<'a> Skyplot<'a> {
         ctx.print(-1.0, 0.0, "W".green());
     }
 
-    fn draw_svs(&self, ctx: &mut Context, svs: &[PlotableSv]) {
+    fn draw_svs(ctx: &mut Context, svs: &[PlotableSv]) {
         ctx.marker(Marker::HalfBlock);
         for sv in svs.iter() {
             ctx.draw(sv);

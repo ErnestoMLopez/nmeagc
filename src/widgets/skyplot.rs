@@ -6,13 +6,14 @@ use ratatui::{
     style::{Color, Stylize},
     symbols::Marker,
     widgets::{
-        Block, Paragraph, StatefulWidget, Widget, Wrap,
+        Block, BlockExt, Paragraph, StatefulWidget, Widget, Wrap,
         canvas::{Canvas, Circle, Context, Line, Shape},
     },
 };
 
-pub struct Skyplot {
+pub struct Skyplot<'a> {
     pub satellites: Vec<SkyplotSatellite>,
+    block: Option<Block<'a>>,
 }
 
 pub struct SkyplotSatellite {
@@ -26,22 +27,21 @@ pub struct SkyplotState {
     pub plot_area: Rect,
 }
 
-impl StatefulWidget for Skyplot {
+impl<'a> StatefulWidget for Skyplot<'a> {
     type State = SkyplotState;
 
     fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
-        let block = Block::bordered().title("Skyplot").style(THEME.borders);
-        let inner_area = block.inner(area);
+        let widget_area = self.block.inner_if_some(area);
 
-        block.render(area, buf);
+        self.block.as_ref().render(area, buf);
 
-        state.plot_area = Self::top_centered_square(inner_area);
+        state.plot_area = Self::top_centered_square(widget_area);
 
         if state.plot_area.width.min(state.plot_area.height) < 5 {
             Paragraph::new("Not enough space")
                 .centered()
                 .wrap(Wrap { trim: true })
-                .render(inner_area, buf);
+                .render(widget_area, buf);
             return;
         }
 
@@ -60,9 +60,19 @@ impl StatefulWidget for Skyplot {
     }
 }
 
-impl Skyplot {
+impl<'a> Skyplot<'a> {
     pub fn new(satellites: Vec<SkyplotSatellite>) -> Self {
-        Self { satellites }
+        Self {
+            block: None,
+            satellites,
+        }
+    }
+
+    /// Surrounds the [`Skyplot`] widget with a [`Block`].
+    #[must_use = "method moves the value of self and returns the modified value"]
+    pub fn block(mut self, block: Block<'a>) -> Self {
+        self.block = Some(block);
+        self
     }
 
     fn draw_grid(ctx: &mut Context) {

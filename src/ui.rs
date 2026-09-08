@@ -166,7 +166,8 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
             elevation: 5.0,
             azimuth: 350.0,
         },
-    ]);
+    ])
+    .block(Block::bordered().title("Skyplot").style(THEME.borders));
 
     frame.render_widget(time_block, time_area);
     frame.render_widget(position_text, position_area);

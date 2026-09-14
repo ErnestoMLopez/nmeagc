@@ -1,11 +1,14 @@
 use crate::gnss::Gnss;
 use crate::theme::THEME;
+
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Position, Rect},
     style::{Color, Stylize},
     symbols::Marker,
     widgets::{
+        Block, BlockExt, BorderType, Borders, Cell, Paragraph, Row, StatefulWidget, Table, Widget,
+        Wrap,
         canvas::{Canvas, Circle, Context, Line, Painter, Shape},
     },
 };
@@ -13,10 +16,12 @@ use ratatui::{
 pub struct Skyplot<'a> {
     pub satellites: Vec<SkyplotSatellite>,
     block: Option<Block<'a>>,
+    mouse_position: Option<(u16, u16)>,
 }
 
 pub struct SkyplotSatellite {
     pub gnss: Gnss,
+    pub svid: u8,
     pub elevation: f64,
     pub azimuth: f64,
 }
@@ -46,7 +51,9 @@ impl<'a> StatefulWidget for Skyplot<'a> {
 
         self.block.as_ref().render(area, buf);
 
-        state.plot_area = Self::top_centered_square(widget_area);
+        let (plot_area, info_area) = Self::split_area(widget_area);
+
+        state.plot_area = plot_area;
 
         if state.plot_area.width.min(state.plot_area.height) < 5 {
             Paragraph::new("Not enough space")
@@ -81,17 +88,42 @@ impl<'a> StatefulWidget for Skyplot<'a> {
                 Self::draw_grid(ctx);
                 ctx.layer();
                 Self::draw_svs(ctx, &svs);
-            });
+            })
+            .block(
+                Block::new()
+                    .border_type(BorderType::LightDoubleDashed)
+                    .borders(Borders::BOTTOM),
+            );
 
         skyplot.render(state.plot_area, buf);
+
+        // If we enabled mouse support print satellite info if a satellite is hovered
+        if let Some(satellite) = self.detect_hovered_satellite(&svs, state.plot_area) {
+            let rows = [
+                Row::new([
+                    Cell::from(format!("GNSS: {}", satellite.gnss.as_str())),
+                    Cell::from(format!("Elevation: {}º", satellite.elevation)),
+                ]),
+                Row::new([
+                    Cell::from(format!("SVID: {:02}", satellite.svid)),
+                    Cell::from(format!("Azimuth:   {}º", satellite.azimuth)),
+                ]),
+            ];
+            let widths = [Constraint::Percentage(40), Constraint::Percentage(60)];
+            let table = Table::new(rows, widths)
+                .column_spacing(1)
+                .style(Color::White);
+            Widget::render(table, info_area, buf);
+        }
     }
 }
 
 impl<'a> Skyplot<'a> {
     pub fn new(satellites: Vec<SkyplotSatellite>) -> Self {
         Self {
-            block: None,
             satellites,
+            block: None,
+            mouse_position: None,
         }
     }
 
@@ -100,6 +132,30 @@ impl<'a> Skyplot<'a> {
     pub fn block(mut self, block: Block<'a>) -> Self {
         self.block = Some(block);
         self
+    }
+
+    pub fn with_hover(mut self, mouse_position: Option<(u16, u16)>) -> Self {
+        self.mouse_position = mouse_position;
+        self
+    }
+
+    fn detect_hovered_satellite(
+        &self,
+        svs: &[PlotableSv],
+        plot_area: Rect,
+    ) -> Option<&SkyplotSatellite> {
+        let mouse_position = self.mouse_position?;
+        let (mouse_x, mouse_y) = Self::terminal_to_canvas(mouse_position, plot_area)?;
+
+        svs.iter()
+            .enumerate()
+            .map(|(index, sv)| {
+                let distance = (sv.x - mouse_x).hypot(sv.y - mouse_y);
+                (index, distance)
+            })
+            .filter(|(_, distance)| *distance <= 0.1)
+            .min_by(|(_, left), (_, right)| left.total_cmp(right))
+            .and_then(|(index, _)| self.satellites.get(index))
     }
 
     fn draw_grid(ctx: &mut Context) {
@@ -124,15 +180,45 @@ impl<'a> Skyplot<'a> {
         }
     }
 
-    fn top_centered_square(area: Rect) -> Rect {
-        let width = area.width.min(area.height * 2);
-        let height = width / 2;
-        Rect {
-            x: area.x + (area.width - width) / 2,
-            y: area.y,
-            width,
-            height,
+    fn split_area(area: Rect) -> (Rect, Rect) {
+        let top_width = area.width.min(area.height * 2);
+        let top_height = top_width / 2;
+        let top_x = area.x + (area.width - top_width) / 2;
+        let top_y = area.y;
+
+        let top = Rect::new(top_x, top_y, top_width, top_height);
+        let bottom = Rect::new(
+            area.x,
+            area.y + top_height,
+            area.width,
+            area.height - top_height,
+        );
+
+        (top, bottom)
+    }
+
+    fn terminal_to_canvas(mouse: (u16, u16), plot_area: Rect) -> Option<(f64, f64)> {
+        let mouse = Position::from(mouse);
+
+        if !plot_area.contains(mouse) {
+            return None;
         }
+
+        // Normalize terminal coordinates relative to canvas origin
+        let local_cell_x = (mouse.x - plot_area.x) as f64;
+        let local_cell_y = (mouse.y - plot_area.y) as f64;
+
+        // Convert cell heights to HalfBlock sub-pixel steps.
+        let total_sub_pixels_y = (plot_area.height * 2) as f64;
+
+        // HalfBlock maps top-to-bottom. We must also invert Y because Canvas y-bounds grow upwards.
+        let local_sub_pixel_y = total_sub_pixels_y - (local_cell_y * 2.0);
+
+        // Interpolate to Canvas bounds
+        let canvas_x = -1.0 + (local_cell_x / plot_area.width as f64) * 2.0;
+        let canvas_y = -1.0 + (local_sub_pixel_y / total_sub_pixels_y) * 2.0;
+
+        Some((canvas_x, canvas_y))
     }
 }
 

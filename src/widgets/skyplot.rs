@@ -6,8 +6,7 @@ use ratatui::{
     style::{Color, Stylize},
     symbols::Marker,
     widgets::{
-        Block, BlockExt, Paragraph, StatefulWidget, Widget, Wrap,
-        canvas::{Canvas, Circle, Context, Line, Shape},
+        canvas::{Canvas, Circle, Context, Line, Painter, Shape},
     },
 };
 
@@ -138,7 +137,7 @@ impl<'a> Skyplot<'a> {
 }
 
 impl Shape for PlotableSv {
-    fn draw(&self, painter: &mut ratatui::widgets::canvas::Painter) {
+    fn draw(&self, painter: &mut Painter) {
         if let Some((x, y)) = painter.get_point(self.x, self.y) {
             painter.paint(x, y, self.color);
         }

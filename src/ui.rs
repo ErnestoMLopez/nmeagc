@@ -175,6 +175,7 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
         },
     ])
     .block(Block::bordered().title("Skyplot").style(THEME.borders))
+    .style(THEME.root)
     .with_hover(app.mouse_position);
 
     frame.render_widget(time_block, time_area);

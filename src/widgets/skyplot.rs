@@ -1,10 +1,9 @@
 use crate::gnss::Gnss;
-use crate::theme::THEME;
 
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Position, Rect},
-    style::{Color, Stylize},
+    style::{Color, Style, Stylize},
     symbols::Marker,
     widgets::{
         Block, BlockExt, BorderType, Borders, Cell, Paragraph, Row, StatefulWidget, Table, Widget,
@@ -16,6 +15,7 @@ use ratatui::{
 pub struct Skyplot<'a> {
     pub satellites: Vec<SkyplotSatellite>,
     block: Option<Block<'a>>,
+    style: Style,
     mouse_position: Option<(u16, u16)>,
 }
 
@@ -80,7 +80,7 @@ impl<'a> StatefulWidget for Skyplot<'a> {
             .collect();
 
         let skyplot = Canvas::default()
-            .background_color(THEME.root.bg.unwrap_or(Color::Reset))
+            .background_color(self.style.bg.unwrap_or(Color::Reset))
             .marker(Marker::Braille)
             .x_bounds([-1.0, 1.0])
             .y_bounds([-1.0, 1.0])
@@ -123,6 +123,7 @@ impl<'a> Skyplot<'a> {
         Self {
             satellites,
             block: None,
+            style: Style::default(),
             mouse_position: None,
         }
     }
@@ -131,6 +132,11 @@ impl<'a> Skyplot<'a> {
     #[must_use = "method moves the value of self and returns the modified value"]
     pub fn block(mut self, block: Block<'a>) -> Self {
         self.block = Some(block);
+        self
+    }
+
+    pub fn style(mut self, style: Style) -> Self {
+        self.style = style;
         self
     }
 

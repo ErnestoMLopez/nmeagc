@@ -2,7 +2,7 @@ use crate::gnss::Gnss;
 
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Position, Rect},
+    layout::{Constraint, Layout, Position, Rect},
     style::{Color, Style, Stylize},
     symbols::Marker,
     widgets::{
@@ -184,18 +184,12 @@ impl<'a> Skyplot<'a> {
     }
 
     fn split_area(area: Rect) -> (Rect, Rect) {
-        let top_width = area.width.min(area.height * 2);
-        let top_height = top_width / 2;
-        let top_x = area.x + (area.width - top_width) / 2;
-        let top_y = area.y;
+        let layout = Layout::vertical([Constraint::Fill(1), Constraint::Max(3)]);
+        let [top, bottom] = area.layout(&layout);
 
-        let top = Rect::new(top_x, top_y, top_width, top_height);
-        let bottom = Rect::new(
-            area.x,
-            area.y + top_height,
-            area.width,
-            area.height - top_height,
-        );
+        let plot_size = top.width.min(top.height * 2);
+
+        let top = top.centered_horizontally(Constraint::Length(plot_size));
 
         (top, bottom)
     }

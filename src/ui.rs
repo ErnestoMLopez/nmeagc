@@ -162,6 +162,12 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
             azimuth: 95.0,
         },
         SkyplotSatellite {
+            gnss: Gnss::Glonass,
+            svid: 1,
+            elevation: 3.0,
+            azimuth: 185.0,
+        },
+        SkyplotSatellite {
             gnss: Gnss::Beidou,
             svid: 12,
             elevation: 15.0,

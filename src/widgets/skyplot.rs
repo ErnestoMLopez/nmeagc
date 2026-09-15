@@ -78,12 +78,7 @@ impl<'a> Widget for Skyplot<'a> {
                 Self::draw_grid(ctx);
                 ctx.layer();
                 Self::draw_svs(ctx, &svs);
-            })
-            .block(
-                Block::new()
-                    .border_type(BorderType::LightDoubleDashed)
-                    .borders(Borders::BOTTOM),
-            );
+            });
 
         skyplot.render(plot_area, buf);
 
@@ -101,9 +96,19 @@ impl<'a> Widget for Skyplot<'a> {
             ];
             let widths = [Constraint::Percentage(40), Constraint::Percentage(60)];
             let table = Table::new(rows, widths)
+                .block(
+                    Block::new()
+                        .border_type(BorderType::LightDoubleDashed)
+                        .borders(Borders::TOP),
+                )
                 .column_spacing(1)
                 .style(Color::White);
             Widget::render(table, info_area, buf);
+        } else {
+            Block::new()
+                .border_type(BorderType::LightDoubleDashed)
+                .borders(Borders::TOP)
+                .render(info_area, buf);
         }
     }
 }

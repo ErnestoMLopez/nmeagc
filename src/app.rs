@@ -12,6 +12,7 @@ use std::{
 
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
+use color_eyre::eyre::Context;
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
@@ -63,7 +64,7 @@ impl App {
     ///
     /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
     /// parsing and event generation is done in a thread loop.
-    pub fn setup_reader(&mut self) {
+    pub fn setup_reader(&mut self) -> Result<()> {
         // Opening the serial port to listen for NMEA data
         // TODO: Specify port configuration from CLI arguments or from initial dialog box
         // TODO: Pass port configuration from the application main thread
@@ -76,18 +77,20 @@ impl App {
             .exclusive(false)
             .timeout(Duration::MAX)
             .open()
-            .expect("Error opening serial port");
+            .wrap_err("Error opening serial port")?;
 
         let reader = BufReader::new(port);
         let handler = self.event_handler.create_actor();
         let parser = Arc::clone(&self.nmea_data);
 
         thread::spawn(move || run_nmea_handler(handler, reader, parser));
+
+        Ok(())
     }
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        self.setup_reader();
+        self.setup_reader()?;
 
         while self.running {
             terminal.draw(|frame| self.render(frame))?;

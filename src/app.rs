@@ -1,7 +1,6 @@
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
-use crate::widgets::skyplot::SkyplotState;
 
 use std::{
     io::BufReader,
@@ -29,6 +28,8 @@ const MAX_RAW_NMEA_LOGS: usize = 1000;
 pub struct App {
     /// Indicates if the application is running.
     pub running: bool,
+    /// Last recorded mouse position (for hovering detection)
+    pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
     pub event_handler: EventHandler,
     /// Current tab.
@@ -41,8 +42,6 @@ pub struct App {
     pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
     /// NMEA parser and data (shared between the event handler and the application).
     pub nmea_data: Arc<Mutex<Nmea>>,
-    /// State of the skyplot widget (for rendering of hovered satellite info).
-    pub skyplot_state: SkyplotState,
 }
 
 impl App {
@@ -50,13 +49,13 @@ impl App {
     pub fn new() -> Self {
         Self {
             running: true,
+            mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
             nav_data: NavigationData::default(),
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
-            skyplot_state: SkyplotState::default(),
         }
     }
 
@@ -149,7 +148,7 @@ impl App {
                 // Handle mouse drag events here
             }
             MouseEventKind::Moved => {
-                // Handle mouse move events here
+                self.mouse_position = Some((mouse_event.column, mouse_event.row))
             }
             _ => {}
         }

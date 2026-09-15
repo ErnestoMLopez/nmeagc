@@ -1,15 +1,16 @@
 use crate::app::{App, AppTab};
+use crate::gnss::Gnss;
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
 use crate::widgets::{
     signals_monitor::{SignalInfo, SignalsMonitor},
-    skyplot::Skyplot,
+    skyplot::{Skyplot, SkyplotSatellite},
 };
 
 use ratatui::{
     Frame,
-    layout::{Constraint, Layout, Rect},
-    style::{Color, Style},
+    layout::{Constraint, HorizontalAlignment, Layout, Rect},
+    style::{Color, Style, Stylize},
     symbols::Marker,
     text::{Line, Text},
     widgets::{
@@ -24,10 +25,15 @@ impl App {
         let screen = Block::new().style(THEME.root);
         frame.render_widget(screen, frame.area());
 
-        let layout = Layout::vertical([Constraint::Length(1), Constraint::Min(0)]);
-        let [titlebar_area, tabcontent_area] = frame.area().layout(&layout);
+        let layout = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ]);
+        let [titlebar_area, tabcontent_area, footer_area] = frame.area().layout(&layout);
 
         render_tabs_title(self, frame, titlebar_area);
+        render_footer(self, frame, footer_area);
 
         match self.tab {
             AppTab::Monitor => render_monitor_tab(self, frame, tabcontent_area),
@@ -55,6 +61,17 @@ fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(tabs, tabs_area);
 }
 
+fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
+    let mouse = app.mouse_position.map_or_else(
+        || "Mouse at: (-,-)".to_string(),
+        |position| format!("Mouse at: {:?}", position),
+    );
+    let debug_data = Paragraph::new(mouse)
+        .alignment(HorizontalAlignment::Right)
+        .bg(Color::Black);
+    frame.render_widget(debug_data, area);
+}
+
 fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let layout = Layout::horizontal([Constraint::Min(35), Constraint::Percentage(70)]);
     let [left_area, right_area] = area.layout(&layout);
@@ -78,7 +95,6 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let chartsplot_block = Block::bordered()
         .title("Position charts")
         .style(THEME.borders);
-    let skyplot_block = Block::bordered().title("Skyplot").style(THEME.borders);
 
     let nmea_data = app.nmea_data.lock().expect("mutex poisoned");
 
@@ -109,21 +125,71 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     let signals_monitor = SignalsMonitor::new(SignalInfo::dummy());
 
     let skyplot = Skyplot::new(vec![
-        (0.0, 0.0),
-        (30.0, 45.0),
-        (60.0, 30.0),
-        (90.0, 60.0),
-        (120.0, 15.0),
-        (150.0, 75.0),
-    ]);
+        SkyplotSatellite {
+            gnss: Gnss::Gps,
+            svid: 15,
+            elevation: 90.0,
+            azimuth: 0.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Gps,
+            svid: 32,
+            elevation: 45.0,
+            azimuth: 45.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Gps,
+            svid: 03,
+            elevation: 20.0,
+            azimuth: 300.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Galileo,
+            svid: 30,
+            elevation: 80.0,
+            azimuth: 160.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Galileo,
+            svid: 36,
+            elevation: 10.0,
+            azimuth: 110.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Glonass,
+            svid: 22,
+            elevation: 70.0,
+            azimuth: 95.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Glonass,
+            svid: 1,
+            elevation: 3.0,
+            azimuth: 185.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Beidou,
+            svid: 12,
+            elevation: 15.0,
+            azimuth: 320.0,
+        },
+        SkyplotSatellite {
+            gnss: Gnss::Beidou,
+            svid: 7,
+            elevation: 5.0,
+            azimuth: 350.0,
+        },
+    ])
+    .block(Block::bordered().title("Skyplot").style(THEME.borders))
+    .style(THEME.root)
+    .with_hover(app.mouse_position);
 
     frame.render_widget(time_block, time_area);
     frame.render_widget(position_text, position_area);
     frame.render_widget(scatter_block, scatter_area);
     frame.render_widget(signals_monitor, signals_monitor_area);
     frame.render_widget(chartsplot_block, chartsplot_area);
-    frame.render_widget(skyplot_block, skyplot_area);
-    frame.render_stateful_widget(skyplot, skyplot_area, &mut app.skyplot_state);
+    frame.render_widget(skyplot, skyplot_area);
 }
 
 fn render_map_tab(app: &App, frame: &mut Frame, area: Rect) {

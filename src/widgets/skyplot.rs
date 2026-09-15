@@ -187,9 +187,13 @@ impl<'a> Skyplot<'a> {
         let layout = Layout::vertical([Constraint::Fill(1), Constraint::Max(3)]);
         let [top, bottom] = area.layout(&layout);
 
-        let plot_size = top.width.min(top.height * 2);
+        let plot_height = top.height.min(top.width / 2);
+        let plot_width = plot_height * 2;
 
-        let top = top.centered_horizontally(Constraint::Length(plot_size));
+        let top = top.centered(
+            Constraint::Length(plot_width),
+            Constraint::Length(plot_height),
+        );
 
         (top, bottom)
     }

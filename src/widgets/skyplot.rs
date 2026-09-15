@@ -207,19 +207,17 @@ impl<'a> Skyplot<'a> {
             return None;
         }
 
-        // Normalize terminal coordinates relative to canvas origin
-        let local_cell_x = (mouse.x - plot_area.x) as f64;
-        let local_cell_y = (mouse.y - plot_area.y) as f64;
+        // Calculate the size of a terminal cell
+        let cell_width = 2.0 / plot_area.x as f64;
+        let cell_height = 2.0 / plot_area.y as f64;
 
-        // Convert cell heights to HalfBlock sub-pixel steps.
-        let total_sub_pixels_y = (plot_area.height * 2) as f64;
+        // Normalize terminal coordinates (cell center point) relative to canvas origin
+        let canvas_cell_x = (mouse.x - plot_area.x) as f64 + cell_width;
+        let canvas_cell_y = (mouse.y - plot_area.y) as f64 + cell_height;
 
-        // HalfBlock maps top-to-bottom. We must also invert Y because Canvas y-bounds grow upwards.
-        let local_sub_pixel_y = total_sub_pixels_y - (local_cell_y * 2.0);
-
-        // Interpolate to Canvas bounds
-        let canvas_x = -1.0 + (local_cell_x / plot_area.width as f64) * 2.0;
-        let canvas_y = -1.0 + (local_sub_pixel_y / total_sub_pixels_y) * 2.0;
+        // Interpolate to Canvas bounds, inverting Y coordinate due to the Canvas reference frame
+        let canvas_x = -1.0 + (canvas_cell_x / plot_area.width as f64) * 2.0;
+        let canvas_y = 1.0 - (canvas_cell_y / plot_area.height as f64) * 2.0;
 
         Some((canvas_x, canvas_y))
     }

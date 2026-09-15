@@ -1,7 +1,6 @@
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
-use crate::widgets::skyplot::SkyplotState;
 
 use std::{
     io::BufReader,
@@ -42,8 +41,6 @@ pub struct App {
     pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
     /// NMEA parser and data (shared between the event handler and the application).
     pub nmea_data: Arc<Mutex<Nmea>>,
-    /// State of the skyplot widget (for rendering of hovered satellite info).
-    pub skyplot_state: SkyplotState,
 }
 
 impl App {
@@ -58,7 +55,6 @@ impl App {
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
-            skyplot_state: SkyplotState::default(),
         }
     }
 

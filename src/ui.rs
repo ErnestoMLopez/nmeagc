@@ -183,7 +183,7 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(scatter_block, scatter_area);
     frame.render_widget(signals_monitor, signals_monitor_area);
     frame.render_widget(chartsplot_block, chartsplot_area);
-    frame.render_stateful_widget(skyplot, skyplot_area, &mut app.skyplot_state);
+    frame.render_widget(skyplot, skyplot_area);
 }
 
 fn render_map_tab(app: &App, frame: &mut Frame, area: Rect) {

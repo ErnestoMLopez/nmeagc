@@ -6,8 +6,7 @@ use ratatui::{
     style::{Color, Style, Stylize},
     symbols::Marker,
     widgets::{
-        Block, BlockExt, BorderType, Borders, Cell, Paragraph, Row, StatefulWidget, Table, Widget,
-        Wrap,
+        Block, BlockExt, BorderType, Borders, Cell, Paragraph, Row, Table, Widget, Wrap,
         canvas::{Canvas, Circle, Context, Line, Painter, Shape},
     },
 };
@@ -26,11 +25,6 @@ pub struct SkyplotSatellite {
     pub azimuth: f64,
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct SkyplotState {
-    pub plot_area: Rect,
-}
-
 struct PlotableSv {
     color: Color,
     x: f64,
@@ -43,19 +37,15 @@ impl PlotableSv {
     }
 }
 
-impl<'a> StatefulWidget for Skyplot<'a> {
-    type State = SkyplotState;
-
-    fn render(self, area: Rect, buf: &mut Buffer, state: &mut Self::State) {
+impl<'a> Widget for Skyplot<'a> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
         let widget_area = self.block.inner_if_some(area);
 
         self.block.as_ref().render(area, buf);
 
         let (plot_area, info_area) = Self::split_area(widget_area);
 
-        state.plot_area = plot_area;
-
-        if state.plot_area.width.min(state.plot_area.height) < 5 {
+        if plot_area.width.min(plot_area.height) < 5 {
             Paragraph::new("Not enough space")
                 .centered()
                 .wrap(Wrap { trim: true })
@@ -95,10 +85,10 @@ impl<'a> StatefulWidget for Skyplot<'a> {
                     .borders(Borders::BOTTOM),
             );
 
-        skyplot.render(state.plot_area, buf);
+        skyplot.render(plot_area, buf);
 
         // If we enabled mouse support print satellite info if a satellite is hovered
-        if let Some(satellite) = self.detect_hovered_satellite(&svs, state.plot_area) {
+        if let Some(satellite) = self.detect_hovered_satellite(&svs, plot_area) {
             let rows = [
                 Row::new([
                     Cell::from(format!("GNSS: {}", satellite.gnss.as_str())),
@@ -135,11 +125,13 @@ impl<'a> Skyplot<'a> {
         self
     }
 
-    pub fn style(mut self, style: Style) -> Self {
-        self.style = style;
+    #[must_use = "method moves the value of self and returns the modified value"]
+    pub fn style<S: Into<Style>>(mut self, style: S) -> Self {
+        self.style = style.into();
         self
     }
 
+    #[must_use = "method moves the value of self and returns the modified value"]
     pub fn with_hover(mut self, mouse_position: Option<(u16, u16)>) -> Self {
         self.mouse_position = mouse_position;
         self

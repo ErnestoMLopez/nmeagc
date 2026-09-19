@@ -99,7 +99,7 @@ impl App {
             let gnss: Gnss = satellite.gnss_type().into();
             SvData {
                 gnss: gnss,
-                svid: satellite.prn(),
+                svid: satellite.prn() as u8,
                 channel: None,
                 signals: vec![SignalData {
                     signal: GnssSignal::from(gnss),

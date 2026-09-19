@@ -1,5 +1,4 @@
 use crate::app::{App, AppTab};
-use crate::gnss::Gnss;
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::theme::THEME;
 use crate::widgets::{
@@ -124,65 +123,10 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     // TODO: Reemplazar por la obtención de datos del estado de la app
     let signals_monitor = SignalsMonitor::new(SignalInfo::dummy());
 
-    let skyplot = Skyplot::new(vec![
-        SkyplotSatellite {
-            gnss: Gnss::Gps,
-            svid: 15,
-            elevation: 90.0,
-            azimuth: 0.0,
-        },
-        SkyplotSatellite {
-            gnss: Gnss::Gps,
-            svid: 32,
-            elevation: 45.0,
-            azimuth: 45.0,
-        },
-        SkyplotSatellite {
-            gnss: Gnss::Gps,
-            svid: 03,
-            elevation: 20.0,
-            azimuth: 300.0,
-        },
-        SkyplotSatellite {
-            gnss: Gnss::Galileo,
-            svid: 30,
-            elevation: 80.0,
-            azimuth: 160.0,
-        },
-        SkyplotSatellite {
-            gnss: Gnss::Galileo,
-            svid: 36,
-            elevation: 10.0,
-            azimuth: 110.0,
-        },
-        SkyplotSatellite {
-            gnss: Gnss::Glonass,
-            svid: 22,
-            elevation: 70.0,
-            azimuth: 95.0,
-        },
-        SkyplotSatellite {
-            gnss: Gnss::Glonass,
-            svid: 1,
-            elevation: 3.0,
-            azimuth: 185.0,
-        },
-        SkyplotSatellite {
-            gnss: Gnss::Beidou,
-            svid: 12,
-            elevation: 15.0,
-            azimuth: 320.0,
-        },
-        SkyplotSatellite {
-            gnss: Gnss::Beidou,
-            svid: 7,
-            elevation: 5.0,
-            azimuth: 350.0,
-        },
-    ])
-    .block(Block::bordered().title("Skyplot").style(THEME.borders))
-    .style(THEME.root)
-    .with_hover(app.mouse_position);
+    let skyplot = Skyplot::from(&*app)
+        .block(Block::bordered().title("Skyplot").style(THEME.borders))
+        .style(THEME.root)
+        .with_hover(app.mouse_position);
 
     frame.render_widget(time_block, time_area);
     frame.render_widget(position_text, position_area);
@@ -306,4 +250,26 @@ fn format_longitude(lon: f64) -> String {
     let seconds = (minutes_raw - minutes as f64) * 60.0;
 
     format!("{}° {}' {:.2}\" {}", degrees, minutes, seconds, direction)
+}
+
+impl<'a> From<&App> for Skyplot<'a> {
+    fn from(app: &App) -> Self {
+        let satellites = app
+            .sv_data
+            .iter()
+            .filter_map(|sv| match (sv.elevation, sv.azimuth) {
+                (Some(elevation), Some(azimuth)) if !sv.signals.is_empty() => {
+                    Some(SkyplotSatellite {
+                        gnss: sv.gnss,
+                        svid: sv.svid,
+                        elevation: elevation as f64,
+                        azimuth: azimuth as f64,
+                    })
+                }
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        Skyplot::new(satellites)
+    }
 }

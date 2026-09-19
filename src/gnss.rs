@@ -160,7 +160,7 @@ pub struct SvData {
     /// GNSS constellation
     pub gnss: Gnss,
     /// Space vehicle ID
-    pub svid: u32,
+    pub svid: u8,
     /// Frequency channel number (for GLONASS)
     pub channel: Option<i8>,
     /// Signal data for the space vehicle

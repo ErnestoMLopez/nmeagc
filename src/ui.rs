@@ -273,7 +273,7 @@ impl<'a> From<&App> for Skyplot<'a> {
     }
 }
 
-impl From<&App> for SignalsMonitor {
+impl<'a> From<&App> for SignalsMonitor<'a> {
     fn from(app: &App) -> Self {
         let signals = app
             .sv_data

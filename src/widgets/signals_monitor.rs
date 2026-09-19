@@ -3,7 +3,7 @@ use crate::theme::THEME;
 
 use ratatui::{
     buffer::Buffer,
-    layout::Rect,
+    layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     text::Line,
     widgets::{Bar, BarChart, BarGroup, Block, Widget},
@@ -19,8 +19,9 @@ pub struct SignalInfo {
     is_used: bool,
 }
 
-pub struct SignalsMonitor {
+pub struct SignalsMonitor<'a> {
     signals: SignalInfoSet,
+    block: Option<Block<'a>>,
 }
 
 impl SignalInfo {
@@ -52,15 +53,32 @@ impl SignalInfo {
     }
 }
 
-impl SignalsMonitor {
+impl<'a> SignalsMonitor<'a> {
+    /// Creates a new [`SignalsMonitor`] widget that displays signals tracking info as a
+    /// [`BarChart`] with an additional summary panel
     pub fn new(signals: Vec<SignalInfo>) -> Self {
         Self {
             signals: SignalInfoSet(signals),
+            block: None,
         }
+    }
+
+    /// Surrounds the [`SignalsMonitor`] widget with a [`Block`].
+    #[must_use = "method moves the value of self and returns the modified value"]
+    pub fn block(mut self, block: Block<'a>) -> Self {
+        self.block = Some(block);
+        self
+    }
+
+    fn split_area(area: Rect) -> (Rect, Rect) {
+        let layout = Layout::horizontal([Constraint::Max(10), Constraint::Fill(3)]);
+        let [left, right] = area.layout(&layout);
+
+        (left, right)
     }
 }
 
-impl Widget for SignalsMonitor {
+impl<'a> Widget for SignalsMonitor<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         const MAX_CN0: u64 = 55;
         let barchart = BarChart::grouped(self.signals)

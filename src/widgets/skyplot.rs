@@ -12,7 +12,7 @@ use ratatui::{
 };
 
 pub struct Skyplot<'a> {
-    pub satellites: Vec<SkyplotSatellite>,
+    satellites: Vec<SkyplotSatellite>,
     block: Option<Block<'a>>,
     style: Style,
     mouse_position: Option<(u16, u16)>,

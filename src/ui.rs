@@ -120,8 +120,7 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     ];
     let position_text = Paragraph::new(lines).block(position_block);
 
-    // TODO: Reemplazar por la obtención de datos del estado de la app
-    let signals_monitor = SignalsMonitor::new(SignalInfo::dummy());
+    let signals_monitor = SignalsMonitor::from(&*app);
 
     let skyplot = Skyplot::from(&*app)
         .block(Block::bordered().title("Skyplot").style(THEME.borders))
@@ -271,5 +270,25 @@ impl<'a> From<&App> for Skyplot<'a> {
             .collect::<Vec<_>>();
 
         Skyplot::new(satellites)
+    }
+}
+
+impl From<&App> for SignalsMonitor {
+    fn from(app: &App) -> Self {
+        let signals = app
+            .sv_data
+            .iter()
+            .map(|sv| {
+                sv.signals
+                    .iter()
+                    .map(|signal| {
+                        SignalInfo::new(signal.signal, sv.svid, signal.cn0 as u8, signal.is_used)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect();
+
+        SignalsMonitor::new(signals)
     }
 }

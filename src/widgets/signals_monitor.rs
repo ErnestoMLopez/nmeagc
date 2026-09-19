@@ -15,7 +15,7 @@ struct SignalInfoSet(Vec<SignalInfo>);
 pub struct SignalInfo {
     signal: GnssSignal,
     svid: u8,
-    cn0: u64,
+    cn0: u8,
     is_used: bool,
 }
 
@@ -24,7 +24,7 @@ pub struct SignalsMonitor {
 }
 
 impl SignalInfo {
-    pub fn new(signal: GnssSignal, svid: u8, cn0: u64, is_used: bool) -> Self {
+    pub fn new(signal: GnssSignal, svid: u8, cn0: u8, is_used: bool) -> Self {
         Self {
             signal,
             svid,
@@ -107,7 +107,7 @@ impl<'a> Into<Vec<BarGroup<'a>>> for SignalInfoSet {
 impl<'a> From<SignalInfo> for Bar<'a> {
     fn from(signal_info: SignalInfo) -> Self {
         Bar::default()
-            .value(signal_info.cn0)
+            .value(signal_info.cn0 as u64)
             .label(signal_info.signal.as_signal_code_str())
             .style(if signal_info.is_used {
                 Style::default().fg(Color::Green)

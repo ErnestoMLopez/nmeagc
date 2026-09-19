@@ -170,9 +170,9 @@ impl<'a> Skyplot<'a> {
         ctx.print(1.0, 0.0, "E".green());
         ctx.print(0.0, -1.0, "S".green());
         ctx.print(-1.0, 0.0, "W".green());
-        ctx.print(0.9, -0.01, "90º".green());
-        ctx.print(0.6, -0.01, "60º".green());
-        ctx.print(0.3, -0.01, "30º".green());
+        ctx.print(0.9, -0.01, "0º".green());
+        ctx.print(0.6, -0.01, "30º".green());
+        ctx.print(0.3, -0.01, "60º".green());
     }
 
     fn draw_svs(ctx: &mut Context, svs: &[PlotableSv]) {

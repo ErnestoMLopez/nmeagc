@@ -147,8 +147,7 @@ impl<'a> Skyplot<'a> {
         svs: &[PlotableSv],
         plot_area: Rect,
     ) -> Option<&SkyplotSatellite> {
-        let mouse_position = self.mouse_position?;
-        let (mouse_x, mouse_y) = Self::terminal_to_canvas(mouse_position, plot_area)?;
+        let ((mouse_x, mouse_y), threshold) = self.get_mouse_position_and_radius(plot_area)?;
 
         svs.iter()
             .enumerate()
@@ -156,7 +155,7 @@ impl<'a> Skyplot<'a> {
                 let distance = (sv.x - mouse_x).hypot(sv.y - mouse_y);
                 (index, distance)
             })
-            .filter(|(_, distance)| *distance <= 0.1)
+            .filter(|(_, distance)| *distance <= threshold)
             .min_by(|(_, left), (_, right)| left.total_cmp(right))
             .and_then(|(index, _)| self.satellites.get(index))
     }
@@ -198,8 +197,10 @@ impl<'a> Skyplot<'a> {
         (top, bottom)
     }
 
-    fn terminal_to_canvas(mouse: (u16, u16), plot_area: Rect) -> Option<(f64, f64)> {
-        let mouse = Position::from(mouse);
+    /// Calculates the mouse position in the [`Canvas`] coordinates and a threshold radius for mouse
+    /// hovering detection
+    fn get_mouse_position_and_radius(&self, plot_area: Rect) -> Option<((f64, f64), f64)> {
+        let mouse = Position::from(self.mouse_position?);
 
         if !plot_area.contains(mouse) {
             return None;
@@ -209,6 +210,10 @@ impl<'a> Skyplot<'a> {
         let cell_width = 2.0 / plot_area.x as f64;
         let cell_height = 2.0 / plot_area.y as f64;
 
+        // Define a detection radius based on the distance from the cell's center to a vertex of the
+        // cell, with a margin for a more relaxed feeling while hovering
+        let threshold = 1.5 * cell_height.hypot(cell_width) / 2.0;
+
         // Normalize terminal coordinates (cell center point) relative to canvas origin
         let canvas_cell_x = (mouse.x - plot_area.x) as f64 + cell_width;
         let canvas_cell_y = (mouse.y - plot_area.y) as f64 + cell_height;
@@ -217,7 +222,7 @@ impl<'a> Skyplot<'a> {
         let canvas_x = -1.0 + (canvas_cell_x / plot_area.width as f64) * 2.0;
         let canvas_y = 1.0 - (canvas_cell_y / plot_area.height as f64) * 2.0;
 
-        Some((canvas_x, canvas_y))
+        Some(((canvas_x, canvas_y), threshold))
     }
 }
 

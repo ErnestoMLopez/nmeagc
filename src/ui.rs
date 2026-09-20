@@ -120,7 +120,16 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     ];
     let position_text = Paragraph::new(lines).block(position_block);
 
-    let signals_monitor = SignalsMonitor::from(&*app);
+    // let signals_monitor = SignalsMonitor::from(&*app).block(
+    //     Block::bordered()
+    //         .title("Signals monitor")
+    //         .style(THEME.borders),
+    // );
+    let signals_monitor = SignalsMonitor::new(SignalInfo::dummy()).block(
+        Block::bordered()
+            .title("Signals monitor")
+            .style(THEME.borders),
+    );
 
     let skyplot = Skyplot::from(&*app)
         .block(Block::bordered().title("Skyplot").style(THEME.borders))

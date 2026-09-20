@@ -1,14 +1,16 @@
 use crate::gnss::{GalileoSignal, GlonassSignal, Gnss, GnssSignal, GpsSignal};
-use crate::theme::THEME;
 
+use std::collections::{BTreeMap, HashMap};
+
+use ratatui::text::Text;
+use ratatui::widgets::{BorderType, Borders, Paragraph};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::{Color, Style},
     text::Line,
-    widgets::{Bar, BarChart, BarGroup, Block, Widget},
+    widgets::{Bar, BarChart, BarGroup, Block, BlockExt, Widget},
 };
-use std::collections::BTreeMap;
 
 struct SignalInfoSet(Vec<SignalInfo>);
 
@@ -71,29 +73,61 @@ impl<'a> SignalsMonitor<'a> {
     }
 
     fn split_area(area: Rect) -> (Rect, Rect) {
-        let layout = Layout::horizontal([Constraint::Max(10), Constraint::Fill(3)]);
-        let [left, right] = area.layout(&layout);
+        let layout = Layout::horizontal([
+            Constraint::Length(24),
+            Constraint::Length(1),
+            Constraint::Fill(1),
+        ]);
+        let [left, _, right] = area.layout(&layout);
 
         (left, right)
+    }
+
+    fn count_satellites(&self) -> (usize, usize) {
+        let mut svs: HashMap<(Gnss, u8), bool> = HashMap::new();
+
+        self.signals.0.iter().for_each(|signal| {
+            svs.entry((Gnss::from(signal.signal), signal.svid))
+                .or_insert(signal.is_used);
+        });
+
+        let tracked = svs.len();
+        let used = svs.values().filter(|&used| *used).count();
+
+        (tracked, used)
     }
 }
 
 impl<'a> Widget for SignalsMonitor<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
         const MAX_CN0: u64 = 55;
+        let widget_area = self.block.inner_if_some(area);
+
+        self.block.as_ref().render(area, buf);
+
+        let (info_area, barchart_area) = Self::split_area(widget_area);
+
+        let (svs_tracked, svs_used) = self.count_satellites();
+
+        let info_panel = Paragraph::new(Text::from(vec![
+            Line::from(format!("Satellites tracked: {:2}", svs_tracked)),
+            Line::from(format!("Satellites used:    {:2}", svs_used)),
+        ]))
+        .block(
+            Block::new()
+                .border_type(BorderType::LightDoubleDashed)
+                .borders(Borders::RIGHT),
+        );
+
         let barchart = BarChart::grouped(self.signals)
-            .block(
-                Block::bordered()
-                    .title("Signals monitor")
-                    .style(THEME.borders),
-            )
             .bar_style(Style::default().fg(Color::Cyan))
             .bar_width(4)
             .bar_gap(1)
             .group_gap(1)
             .max(MAX_CN0);
 
-        barchart.render(area, buf);
+        barchart.render(barchart_area, buf);
+        info_panel.render(info_area, buf);
     }
 }
 

@@ -19,10 +19,21 @@ pub struct Skyplot<'a> {
 }
 
 pub struct SkyplotSatellite {
-    pub gnss: Gnss,
-    pub svid: u8,
-    pub elevation: f64,
-    pub azimuth: f64,
+    gnss: Gnss,
+    svid: u8,
+    elevation: f64,
+    azimuth: f64,
+}
+
+impl SkyplotSatellite {
+    pub fn new(gnss: Gnss, svid: u8, elevation: f64, azimuth: f64) -> Self {
+        Self {
+            gnss,
+            svid,
+            elevation,
+            azimuth,
+        }
+    }
 }
 
 struct PlotableSv {

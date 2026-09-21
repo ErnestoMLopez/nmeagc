@@ -6,7 +6,7 @@ use ratatui::text::Text;
 use ratatui::widgets::{BorderType, Borders, Paragraph};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Margin, Rect},
     style::{Color, Style},
     text::Line,
     widgets::{Bar, BarChart, BarGroup, Block, BlockExt, Widget},
@@ -24,6 +24,7 @@ pub struct SignalInfo {
 pub struct SignalsMonitor<'a> {
     signals: SignalInfoSet,
     block: Option<Block<'a>>,
+    style: Style,
 }
 
 impl SignalInfo {
@@ -62,6 +63,7 @@ impl<'a> SignalsMonitor<'a> {
         Self {
             signals: SignalInfoSet(signals),
             block: None,
+            style: Style::default(),
         }
     }
 
@@ -72,15 +74,17 @@ impl<'a> SignalsMonitor<'a> {
         self
     }
 
-    fn split_area(area: Rect) -> (Rect, Rect) {
-        let layout = Layout::horizontal([
-            Constraint::Length(24),
-            Constraint::Length(1),
-            Constraint::Fill(1),
-        ]);
-        let [left, _, right] = area.layout(&layout);
+    #[must_use = "method moves the value of self and returns the modified value"]
+    pub fn style<S: Into<Style>>(mut self, style: S) -> Self {
+        self.style = style.into();
+        self
+    }
 
-        (left, right)
+    fn split_area(area: Rect) -> (Rect, Rect) {
+        let layout = Layout::horizontal([Constraint::Fill(1), Constraint::Length(25)]);
+        let [left, right] = area.layout(&layout);
+
+        (left.inner(Margin::new(1, 0)), right)
     }
 
     fn count_satellites(&self) -> (usize, usize) {
@@ -96,6 +100,18 @@ impl<'a> SignalsMonitor<'a> {
 
         (tracked, used)
     }
+
+    fn count_signals(&self) -> (usize, usize) {
+        let tracked = self.signals.0.len();
+        let used = self
+            .signals
+            .0
+            .iter()
+            .filter(|signal| signal.is_used)
+            .count();
+
+        (tracked, used)
+    }
 }
 
 impl<'a> Widget for SignalsMonitor<'a> {
@@ -105,19 +121,10 @@ impl<'a> Widget for SignalsMonitor<'a> {
 
         self.block.as_ref().render(area, buf);
 
-        let (info_area, barchart_area) = Self::split_area(widget_area);
+        let (barchart_area, info_area) = Self::split_area(widget_area);
 
         let (svs_tracked, svs_used) = self.count_satellites();
-
-        let info_panel = Paragraph::new(Text::from(vec![
-            Line::from(format!("Satellites tracked: {:2}", svs_tracked)),
-            Line::from(format!("Satellites used:    {:2}", svs_used)),
-        ]))
-        .block(
-            Block::new()
-                .border_type(BorderType::LightDoubleDashed)
-                .borders(Borders::RIGHT),
-        );
+        let (signals_tracked, signals_used) = self.count_signals();
 
         let barchart = BarChart::grouped(self.signals)
             .bar_style(Style::default().fg(Color::Cyan))
@@ -125,6 +132,19 @@ impl<'a> Widget for SignalsMonitor<'a> {
             .bar_gap(1)
             .group_gap(1)
             .max(MAX_CN0);
+
+        let info_panel = Paragraph::new(Text::from(vec![
+            Line::from(format!(" Satellites tracked: {:2} ", svs_tracked)),
+            Line::from(format!(" Satellites used:    {:2} ", svs_used)),
+            Line::default(),
+            Line::from(format!(" Signals tracked:    {:2} ", signals_tracked)),
+            Line::from(format!(" Signals used:       {:2} ", signals_used)),
+        ]))
+        .block(
+            Block::new()
+                .border_type(BorderType::LightDoubleDashed)
+                .borders(Borders::LEFT),
+        );
 
         barchart.render(barchart_area, buf);
         info_panel.render(info_area, buf);

@@ -113,7 +113,7 @@ impl<'a> Widget for Skyplot<'a> {
                         .borders(Borders::TOP),
                 )
                 .column_spacing(1)
-                .style(Color::White);
+                .style(self.style);
             Widget::render(table, info_area, buf);
         } else {
             Block::new()

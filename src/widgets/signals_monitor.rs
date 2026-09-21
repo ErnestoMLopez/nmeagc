@@ -144,7 +144,8 @@ impl<'a> Widget for SignalsMonitor<'a> {
             Block::new()
                 .border_type(BorderType::LightDoubleDashed)
                 .borders(Borders::LEFT),
-        );
+        )
+        .style(self.style);
 
         barchart.render(barchart_area, buf);
         info_panel.render(info_area, buf);

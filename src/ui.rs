@@ -120,20 +120,17 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     ];
     let position_text = Paragraph::new(lines).block(position_block);
 
-    // let signals_monitor = SignalsMonitor::from(&*app).block(
-    //     Block::bordered()
-    //         .title("Signals monitor")
-    //         .style(THEME.borders),
-    // );
-    let signals_monitor = SignalsMonitor::new(SignalInfo::dummy()).block(
-        Block::bordered()
-            .title("Signals monitor")
-            .style(THEME.borders),
-    );
+    let signals_monitor = SignalsMonitor::from(&*app)
+        .block(
+            Block::bordered()
+                .title("Signals monitor")
+                .style(THEME.borders),
+        )
+        .style(THEME.content);
 
     let skyplot = Skyplot::from(&*app)
         .block(Block::bordered().title("Skyplot").style(THEME.borders))
-        .style(THEME.root)
+        .style(THEME.content)
         .with_hover(app.mouse_position);
 
     frame.render_widget(time_block, time_area);

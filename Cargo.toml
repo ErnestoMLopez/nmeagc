@@ -15,6 +15,7 @@ circular-buffer = { version = "2", default-features = false, features = ["std"] 
 chrono = "0.4.45"
 nmea = "0.7.0"
 serialport = "4.9.0"
+clap = { version = "4.6.7", features = ["derive"] }
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]

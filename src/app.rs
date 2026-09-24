@@ -1,9 +1,12 @@
+use crate::cli::DataSource;
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
 
 use std::{
-    io::BufReader,
+    fs::File,
+    io::{BufReader, Read},
+    net::TcpStream,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -17,7 +20,6 @@ use crossterm::event::{
 };
 use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
-use serialport::{DataBits, FlowControl, Parity, StopBits};
 use strum::{Display, EnumIter, FromRepr};
 
 /// Maximum amount of NMEA sentences to store and render in the raw data tab
@@ -42,11 +44,13 @@ pub struct App {
     pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
     /// NMEA parser and data (shared between the event handler and the application).
     pub nmea_data: Arc<Mutex<Nmea>>,
+    /// Selected NMEA data source.
+    pub source: DataSource,
 }
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new() -> Self {
+    pub fn new(source: DataSource) -> Self {
         Self {
             running: true,
             mouse_position: None,
@@ -56,6 +60,7 @@ impl App {
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
+            source,
         }
     }
 
@@ -64,21 +69,29 @@ impl App {
     /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
     /// parsing and event generation is done in a thread loop.
     pub fn setup_reader(&mut self) -> Result<()> {
-        // Opening the serial port to listen for NMEA data
-        // TODO: Specify port configuration from CLI arguments or from initial dialog box
-        // TODO: Pass port configuration from the application main thread
-        // TODO: Support for reading NMEA data from file (the use of BufReader simplifies this)
-        let port = serialport::new("/tmp/ttyV1", 4800)
-            .data_bits(DataBits::Eight)
-            .flow_control(FlowControl::None)
-            .parity(Parity::None)
-            .stop_bits(StopBits::One)
-            .exclusive(false)
-            .timeout(Duration::MAX)
-            .open()
-            .wrap_err("Error opening serial port")?;
+        let input: Box<dyn Read + Send> = match &self.source {
+            DataSource::Tcp(config) => Box::new(
+                TcpStream::connect((&*config.host, config.port))
+                    .wrap_err("Error opening TCP stream")?,
+            ),
+            DataSource::Serial(config) => {
+                let mut builder = serialport::new(&config.path, config.baudrate)
+                    .data_bits(config.data_bits.into())
+                    .flow_control(config.flow_control.into())
+                    .parity(config.parity.into())
+                    .stop_bits(config.stop_bits.into())
+                    .exclusive(false);
+                if let Some(timeout) = config.timeout {
+                    builder = builder.timeout(Duration::from_millis(timeout));
+                }
+                Box::new(builder.open().wrap_err("Error opening serial port")?)
+            }
+            DataSource::File(config) => {
+                Box::new(File::open(&config.path).wrap_err("Error opening NMEA file")?)
+            }
+        };
 
-        let reader = BufReader::new(port);
+        let reader = BufReader::new(input);
         let handler = self.event_handler.create_actor();
         let parser = Arc::clone(&self.nmea_data);
 

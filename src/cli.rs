@@ -33,38 +33,66 @@ struct SourceArgs {
 #[group(id = "data-source", multiple = false)]
 struct SourceSelector {
     /// Host name for the TCP data source
-    #[arg(short = 'h', long, value_name = "HOST")]
+    #[arg(
+        short = 'h',
+        long,
+        help_heading = "Data source: TCP conection",
+        value_name = "HOST"
+    )]
     host: Option<String>,
     /// Serial port path
-    #[arg(short = 's', long = "serial", value_name = "PATH")]
+    #[arg(
+        short = 's',
+        long = "serial",
+        help_heading = "Data source: Serial port",
+        value_name = "PATH"
+    )]
     serial: Option<String>,
     /// File path for the NMEA data source
-    #[arg(short = 'f', long = "file", value_name = "PATH")]
+    #[arg(
+        short = 'f',
+        long = "file",
+        help_heading = "Data source: File",
+        value_name = "PATH"
+    )]
     file: Option<PathBuf>,
 }
 
 #[derive(Args, Debug)]
 struct SourceOptions {
     /// Port number for the TCP data source
-    #[arg(short, long, requires = "host", default_value_t = 23000)]
+    #[arg(
+        short,
+        long,
+        requires = "host",
+        default_value_t = 23000,
+        help_heading = "Data source: TCP conection"
+    )]
     port: u16,
+
     /// Baudrate of the serial data stream
-    #[arg(short, long, requires = "serial", default_value_t = 9600)]
+    #[arg(
+        short,
+        long,
+        requires = "serial",
+        default_value_t = 9600,
+        help_heading = "Data source: Serial port"
+    )]
     baudrate: u32,
     /// Number of data bits
-    #[arg(long, value_enum, requires = "serial", default_value_t = CliDataBits::Eight)]
+    #[arg(long, value_enum, requires = "serial", default_value_t = CliDataBits::Eight, help_heading = "Data source: Serial port")]
     data_bits: CliDataBits,
     /// Parity mode
-    #[arg(long, value_enum, requires = "serial", default_value_t = CliParity::None)]
+    #[arg(long, value_enum, requires = "serial", default_value_t = CliParity::None, help_heading = "Data source: Serial port")]
     parity: CliParity,
     /// Number of stop bits
-    #[arg(long, value_enum, requires = "serial", default_value_t = CliStopBits::One)]
+    #[arg(long, value_enum, requires = "serial", default_value_t = CliStopBits::One, help_heading = "Data source: Serial port")]
     stop_bits: CliStopBits,
     /// Flow control setting
-    #[arg(long, value_enum, requires = "serial", default_value_t = CliFlowControl::None)]
+    #[arg(long, value_enum, requires = "serial", default_value_t = CliFlowControl::None, help_heading = "Data source: Serial port")]
     flow_control: CliFlowControl,
     /// Read timeout in milliseconds
-    #[arg(long, requires = "serial")]
+    #[arg(long, requires = "serial", help_heading = "Data source: Serial port")]
     timeout: Option<u64>,
 }
 

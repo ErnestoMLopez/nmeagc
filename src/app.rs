@@ -2,6 +2,7 @@ use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
+use crate::source_setup::SourceSetup;
 
 use std::{
     fs::File,
@@ -103,6 +104,13 @@ impl App {
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        if self.interactive {
+            let Some(source) = SourceSetup::run(&mut terminal, &self.event_handler)? else {
+                return Ok(());
+            };
+            self.source = source;
+        }
+
         self.setup_reader()?;
 
         while self.running {

@@ -7,6 +7,7 @@ pub mod cli;
 pub mod event;
 pub mod gnss;
 pub mod nmea;
+pub mod source_setup;
 pub mod terminal;
 pub mod theme;
 pub mod ui;

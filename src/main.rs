@@ -14,12 +14,9 @@ pub mod widgets;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
-    let cli = Cli::parse();
-    dbg!(&cli);
-    let source = cli.into_data_source();
-    dbg!(&source);
+    let args = Cli::parse();
     let terminal = terminal::init();
-    let result = App::new(source).run(terminal);
+    let result = App::new(args).run(terminal);
     terminal::restore();
     result
 }

@@ -1,4 +1,4 @@
-use crate::cli::DataSource;
+use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
@@ -30,6 +30,8 @@ const MAX_RAW_NMEA_LOGS: usize = 1000;
 pub struct App {
     /// Indicates if the application is running.
     pub running: bool,
+    /// Indicates if the client was started in interactive mode for the source configuration
+    pub interactive: bool,
     /// Last recorded mouse position (for hovering detection)
     pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
@@ -50,9 +52,10 @@ pub struct App {
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new(source: DataSource) -> Self {
+    pub fn new(args: Cli) -> Self {
         Self {
             running: true,
+            interactive: args.interactive,
             mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
@@ -60,7 +63,7 @@ impl App {
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
-            source,
+            source: args.data_source(),
         }
     }
 
@@ -75,15 +78,13 @@ impl App {
                     .wrap_err("Error opening TCP stream")?,
             ),
             DataSource::Serial(config) => {
-                let mut builder = serialport::new(&config.path, config.baudrate)
+                let builder = serialport::new(&config.serial_path, config.baudrate)
                     .data_bits(config.data_bits.into())
                     .flow_control(config.flow_control.into())
                     .parity(config.parity.into())
                     .stop_bits(config.stop_bits.into())
-                    .exclusive(false);
-                if let Some(timeout) = config.timeout {
-                    builder = builder.timeout(Duration::from_millis(timeout));
-                }
+                    .exclusive(false)
+                    .timeout(Duration::from_millis(config.timeout.unwrap_or(u64::MAX)));
                 Box::new(builder.open().wrap_err("Error opening serial port")?)
             }
             DataSource::File(config) => {

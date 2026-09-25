@@ -1,165 +1,98 @@
 use std::path::PathBuf;
 
-use clap::{ArgAction, Args, Parser, ValueEnum};
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, builder::Styles};
 use serialport::{DataBits, FlowControl, Parity, StopBits};
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None, disable_help_flag = true)]
+#[command(version, about, long_about = None, disable_help_flag = true, flatten_help = true, styles = Styles::default())]
 pub struct Cli {
     /// Executes the client in interactive mode
     ///
     /// Interactive mode allows configuring the source of the NMEA data to setup a reader directly from the TUI.
     #[arg(short, long)]
-    interactive: bool,
+    pub interactive: bool,
 
     /// Show this help message
-    #[arg(long, action = ArgAction::Help)]
+    #[arg(short = 'H', long, action = ArgAction::Help)]
     help: Option<bool>,
 
     /// Specifies the source and configuration of the NMEA data.
-    #[command(flatten)]
-    source: SourceArgs,
+    #[command(subcommand)]
+    source: Option<DataSource>,
 }
 
-#[derive(Args, Debug)]
-struct SourceArgs {
-    #[command(flatten)]
-    selector: SourceSelector,
-    #[command(flatten)]
-    options: SourceOptions,
-}
-
-#[derive(Args, Debug)]
-#[group(id = "data-source", multiple = false)]
-struct SourceSelector {
-    /// Host name for the TCP data source
-    #[arg(
-        short = 'h',
-        long,
-        help_heading = "Data source: TCP conection",
-        value_name = "HOST"
-    )]
-    host: Option<String>,
-    /// Serial port path
-    #[arg(
-        short = 's',
-        long = "serial",
-        help_heading = "Data source: Serial port",
-        value_name = "PATH"
-    )]
-    serial: Option<String>,
-    /// File path for the NMEA data source
-    #[arg(
-        short = 'f',
-        long = "file",
-        help_heading = "Data source: File",
-        value_name = "PATH"
-    )]
-    file: Option<PathBuf>,
-}
-
-#[derive(Args, Debug)]
-struct SourceOptions {
-    /// Port number for the TCP data source
-    #[arg(
-        short,
-        long,
-        requires = "host",
-        default_value_t = 23000,
-        help_heading = "Data source: TCP conection"
-    )]
-    port: u16,
-
-    /// Baudrate of the serial data stream
-    #[arg(
-        short,
-        long,
-        requires = "serial",
-        default_value_t = 9600,
-        help_heading = "Data source: Serial port"
-    )]
-    baudrate: u32,
-    /// Number of data bits
-    #[arg(long, value_enum, requires = "serial", default_value_t = CliDataBits::Eight, help_heading = "Data source: Serial port")]
-    data_bits: CliDataBits,
-    /// Parity mode
-    #[arg(long, value_enum, requires = "serial", default_value_t = CliParity::None, help_heading = "Data source: Serial port")]
-    parity: CliParity,
-    /// Number of stop bits
-    #[arg(long, value_enum, requires = "serial", default_value_t = CliStopBits::One, help_heading = "Data source: Serial port")]
-    stop_bits: CliStopBits,
-    /// Flow control setting
-    #[arg(long, value_enum, requires = "serial", default_value_t = CliFlowControl::None, help_heading = "Data source: Serial port")]
-    flow_control: CliFlowControl,
-    /// Read timeout in milliseconds
-    #[arg(long, requires = "serial", help_heading = "Data source: Serial port")]
-    timeout: Option<u64>,
-}
-
-#[derive(Debug)]
+#[derive(Subcommand, Debug)]
 pub enum DataSource {
+    /// Establish a TCP connection to a host to use it as NMEA data source.
+    ///
+    /// This is the default option if no command is specified.
+    #[command(short_flag = 't')]
     Tcp(TcpConfig),
+    /// Open a serial port to read NMEA data from it.
+    #[command(short_flag = 's')]
     Serial(SerialConfig),
+    /// Open a file to read NMEA data from it.
+    #[command(short_flag = 'f')]
     File(FileConfig),
 }
 
-#[derive(Debug)]
+#[derive(Args, Debug)]
 pub struct TcpConfig {
+    /// Host name for the TCP data source
+    #[arg(short, long, default_value_t = "127.0.0.1".to_string(), value_name = "HOST")]
     pub host: String,
+    /// Port number for the TCP data source
+    #[arg(short, long, default_value_t = 23000)]
     pub port: u16,
 }
 
-#[derive(Debug)]
+#[derive(Args, Debug)]
 pub struct SerialConfig {
-    pub path: String,
+    /// Serial port path
+    #[arg(display_order = 0, value_name = "PATH")]
+    pub serial_path: String,
+    /// Baudrate of the serial data stream
+    #[arg(short, long, default_value_t = 9600, display_order = 1)]
     pub baudrate: u32,
+    /// Number of data bits
+    #[arg(long, value_enum, default_value_t = CliDataBits::Eight, display_order = 2)]
     pub data_bits: CliDataBits,
+    /// Parity mode
+    #[arg(long, value_enum, default_value_t = CliParity::None, display_order = 2)]
     pub parity: CliParity,
+    /// Number of stop bits
+    #[arg(long, value_enum, default_value_t = CliStopBits::One, display_order = 2)]
     pub stop_bits: CliStopBits,
+    /// Flow control setting
+    #[arg(long, value_enum, default_value_t = CliFlowControl::None, display_order = 2)]
     pub flow_control: CliFlowControl,
+    /// Read timeout in milliseconds
+    #[arg(long)]
     pub timeout: Option<u64>,
 }
 
-#[derive(Debug)]
+#[derive(Args, Debug)]
 pub struct FileConfig {
+    /// File path for the NMEA data source
     pub path: PathBuf,
 }
 
-impl Cli {
-    pub fn into_data_source(self) -> DataSource {
-        self.source.into_data_source()
-    }
-}
-
-impl SourceArgs {
-    fn into_data_source(self) -> DataSource {
-        if let Some(path) = self.selector.serial {
-            return DataSource::Serial(SerialConfig {
-                path,
-                baudrate: self.options.baudrate,
-                data_bits: self.options.data_bits,
-                parity: self.options.parity,
-                stop_bits: self.options.stop_bits,
-                flow_control: self.options.flow_control,
-                timeout: self.options.timeout,
-            });
-        }
-
-        if let Some(path) = self.selector.file {
-            return DataSource::File(FileConfig { path });
-        }
-
-        DataSource::Tcp(TcpConfig {
-            host: self
-                .selector
-                .host
-                .unwrap_or_else(|| "127.0.0.1".to_string()),
-            port: self.options.port,
+impl Default for DataSource {
+    fn default() -> Self {
+        Self::Tcp(TcpConfig {
+            host: "127.0.0.1".to_string(),
+            port: 23000,
         })
     }
 }
 
-// Local enums mapping string arguments to serialport crate types
+impl Cli {
+    /// Get the configured or default NMEA data source
+    pub fn data_source(self) -> DataSource {
+        self.source.unwrap_or_default()
+    }
+}
+
 #[derive(ValueEnum, Clone, Copy, Debug)]
 pub enum CliDataBits {
     Five,
@@ -234,50 +167,53 @@ mod tests {
     use clap::Parser;
 
     #[test]
-    fn defaults_to_tcp_source() {
-        let source = Cli::try_parse_from(["nmeagc"]).unwrap().into_data_source();
+    fn default_source_is_tcp() {
+        let source = Cli::try_parse_from(["nmeagc"]).unwrap().source;
 
+        assert!(source.is_none());
         assert!(matches!(
-            source,
+            source.unwrap_or_default(),
             DataSource::Tcp(TcpConfig { host, port })
                 if host == "127.0.0.1" && port == 23000
         ));
     }
 
     #[test]
-    fn parses_serial_source_and_defaults() {
+    fn parse_serial_source_with_defaults() {
         let source = Cli::try_parse_from(["nmeagc", "-s", "/dev/ttyUSB0"])
             .unwrap()
-            .into_data_source();
+            .source;
 
         assert!(matches!(
             source,
-            DataSource::Serial(SerialConfig {
-                path,
+            Some(DataSource::Serial(SerialConfig {
+                serial_path: path,
                 baudrate: 9600,
                 data_bits: CliDataBits::Eight,
                 parity: CliParity::None,
                 stop_bits: CliStopBits::One,
                 flow_control: CliFlowControl::None,
                 timeout: None,
-            }) if path == "/dev/ttyUSB0"
+            })) if path == "/dev/ttyUSB0"
         ));
     }
 
     #[test]
-    fn parses_file_source() {
+    fn parse_file_source() {
         let source = Cli::try_parse_from(["nmeagc", "-f", "track.nmea"])
             .unwrap()
-            .into_data_source();
+            .source;
 
         assert!(matches!(
             source,
-            DataSource::File(FileConfig { path }) if path == PathBuf::from("track.nmea")
+            Some(DataSource::File(FileConfig { path })) if path == PathBuf::from("track.nmea")
         ));
     }
 
     #[test]
-    fn source_selectors_are_mutually_exclusive() {
-        assert!(Cli::try_parse_from(["nmeagc", "-h", "example.com", "-f", "track.nmea"]).is_err());
+    fn error_sources_are_mutually_exclusive() {
+        assert!(Cli::try_parse_from(["nmeagc", "-h", "localhost", "-f", "track.nmea"]).is_err());
+        assert!(Cli::try_parse_from(["nmeagc", "-s", "/dev/ttyUSB0", "-f", "track.nmea"]).is_err());
+        assert!(Cli::try_parse_from(["nmeagc", "-h", "localhost", "-s", "/dev/ttyUSB0"]).is_err());
     }
 }

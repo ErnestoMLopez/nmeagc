@@ -63,7 +63,7 @@ impl App {
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
-            source: args.data_source(),
+            source: args.source,
         }
     }
 
@@ -73,22 +73,21 @@ impl App {
     /// parsing and event generation is done in a thread loop.
     pub fn setup_reader(&mut self) -> Result<()> {
         let input: Box<dyn Read + Send> = match &self.source {
-            DataSource::Tcp(config) => Box::new(
-                TcpStream::connect((&*config.host, config.port))
-                    .wrap_err("Error opening TCP stream")?,
-            ),
+            DataSource::Tcp(config) => {
+                let address = (&*config.host, config.port);
+                Box::new(TcpStream::connect(address).wrap_err("Error opening TCP stream")?)
+            }
             DataSource::Serial(config) => {
                 let builder = serialport::new(&config.serial_path, config.baudrate)
                     .data_bits(config.data_bits.into())
                     .flow_control(config.flow_control.into())
                     .parity(config.parity.into())
                     .stop_bits(config.stop_bits.into())
-                    .exclusive(false)
                     .timeout(Duration::from_millis(config.timeout.unwrap_or(u64::MAX)));
                 Box::new(builder.open().wrap_err("Error opening serial port")?)
             }
             DataSource::File(config) => {
-                Box::new(File::open(&config.path).wrap_err("Error opening NMEA file")?)
+                Box::new(File::open(&config.path).wrap_err("Error opening file")?)
             }
         };
 

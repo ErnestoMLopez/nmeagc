@@ -18,7 +18,7 @@ pub struct Cli {
 
     /// Specifies the source and configuration of the NMEA data.
     #[command(subcommand)]
-    source: Option<DataSource>,
+    pub source: DataSource,
 }
 
 #[derive(Subcommand, Debug)]
@@ -75,22 +75,6 @@ pub struct SerialConfig {
 pub struct FileConfig {
     /// File path for the NMEA data source
     pub path: PathBuf,
-}
-
-impl Default for DataSource {
-    fn default() -> Self {
-        Self::Tcp(TcpConfig {
-            host: "127.0.0.1".to_string(),
-            port: 23000,
-        })
-    }
-}
-
-impl Cli {
-    /// Get the configured or default NMEA data source
-    pub fn data_source(self) -> DataSource {
-        self.source.unwrap_or_default()
-    }
 }
 
 #[derive(ValueEnum, Clone, Copy, Debug)]
@@ -170,9 +154,8 @@ mod tests {
     fn default_source_is_tcp() {
         let source = Cli::try_parse_from(["nmeagc"]).unwrap().source;
 
-        assert!(source.is_none());
         assert!(matches!(
-            source.unwrap_or_default(),
+            source,
             DataSource::Tcp(TcpConfig { host, port })
                 if host == "127.0.0.1" && port == 23000
         ));
@@ -186,7 +169,7 @@ mod tests {
 
         assert!(matches!(
             source,
-            Some(DataSource::Serial(SerialConfig {
+            DataSource::Serial(SerialConfig {
                 serial_path: path,
                 baudrate: 9600,
                 data_bits: CliDataBits::Eight,
@@ -194,7 +177,7 @@ mod tests {
                 stop_bits: CliStopBits::One,
                 flow_control: CliFlowControl::None,
                 timeout: None,
-            })) if path == "/dev/ttyUSB0"
+            }) if path == "/dev/ttyUSB0"
         ));
     }
 
@@ -206,7 +189,7 @@ mod tests {
 
         assert!(matches!(
             source,
-            Some(DataSource::File(FileConfig { path })) if path == PathBuf::from("track.nmea")
+            DataSource::File(FileConfig { path }) if path == PathBuf::from("track.nmea")
         ));
     }
 

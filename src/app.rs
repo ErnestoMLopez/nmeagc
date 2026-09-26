@@ -2,6 +2,7 @@ use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
+use crate::setup::{SetupAction, SourceSetup};
 
 use std::{
     fs::File,
@@ -32,6 +33,8 @@ pub struct App {
     pub running: bool,
     /// Indicates if the client was started in interactive mode for the source configuration
     pub interactive_setup: bool,
+    /// State for the interactive setup process
+    pub source_setup: SourceSetup,
     /// Last recorded mouse position (for hovering detection)
     pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
@@ -56,6 +59,7 @@ impl App {
         let app = Self {
             running: true,
             interactive_setup: args.interactive,
+            source_setup: SourceSetup::default(),
             mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
@@ -143,6 +147,21 @@ impl App {
         if key_event.kind != crossterm::event::KeyEventKind::Press {
             return Ok(());
         }
+
+        if self.interactive_setup {
+            match self.source_setup.handle_key(key_event)? {
+                SetupAction::Continue => {}
+                SetupAction::Cancel => {
+                    self.event_handler.send(AppEvent::Quit);
+                }
+                SetupAction::Complete(source) => {
+                    self.source = source;
+                    self.event_handler.send(AppEvent::ReaderSetupReady)
+                }
+            }
+            return Ok(());
+        }
+
         match key_event.code {
             KeyCode::Esc | KeyCode::Char('q') => self.event_handler.send(AppEvent::Quit),
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {

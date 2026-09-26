@@ -9,38 +9,90 @@ use ratatui::widgets::ListState;
 #[derive(Debug)]
 pub struct SourceSetup {
     pub step: SetupStep,
-    pub source_selection: ListState,
+    pub source_state: SourceState,
+    pub config_tcp_state: ConfigTcpState,
+    pub config_serial_state: ConfigSerialState,
+    pub config_file_state: ConfigFileState,
     pub input: String,
     pub error: Option<&'static str>,
-    pub tcp_host: String,
-    pub tcp_port: u16,
-    pub serial_path: String,
+}
+
+#[derive(Debug)]
+pub struct SourceState {
+    pub source_list_state: ListState,
+}
+
+#[derive(Debug)]
+pub struct ConfigTcpState {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug)]
+pub struct ConfigSerialState {
+    pub path: String,
     pub baudrate: u32,
     pub data_bits: CliDataBits,
     pub parity: CliParity,
     pub stop_bits: CliStopBits,
     pub flow_control: CliFlowControl,
     pub timeout: Option<u64>,
-    pub file_path: PathBuf,
+}
+
+#[derive(Debug)]
+pub struct ConfigFileState {
+    pub path: PathBuf,
+}
+
+impl Default for SourceState {
+    fn default() -> Self {
+        Self {
+            source_list_state: ListState::default().with_selected(Some(0)),
+        }
+    }
+}
+
+impl Default for ConfigTcpState {
+    fn default() -> Self {
+        Self {
+            host: "127.0.0.1".to_string(),
+            port: 23000,
+        }
+    }
+}
+
+impl Default for ConfigSerialState {
+    fn default() -> Self {
+        Self {
+            path: String::new(),
+            baudrate: 9600,
+            data_bits: CliDataBits::Eight,
+            parity: CliParity::Odd,
+            stop_bits: CliStopBits::One,
+            flow_control: CliFlowControl::None,
+            timeout: None,
+        }
+    }
+}
+
+impl Default for ConfigFileState {
+    fn default() -> Self {
+        Self {
+            path: PathBuf::new(),
+        }
+    }
 }
 
 impl Default for SourceSetup {
     fn default() -> Self {
         Self {
             step: SetupStep::Source,
-            source_selection: ListState::default().with_selected(Some(0)),
+            source_state: SourceState::default(),
+            config_tcp_state: ConfigTcpState::default(),
+            config_serial_state: ConfigSerialState::default(),
+            config_file_state: ConfigFileState::default(),
             input: String::new(),
             error: None,
-            tcp_host: "127.0.0.1".to_string(),
-            tcp_port: 23000,
-            serial_path: String::new(),
-            baudrate: 9600,
-            data_bits: CliDataBits::Eight,
-            parity: CliParity::None,
-            stop_bits: CliStopBits::One,
-            flow_control: CliFlowControl::None,
-            timeout: None,
-            file_path: PathBuf::new(),
         }
     }
 }
@@ -56,9 +108,9 @@ impl SourceSetup {
             KeyCode::Up => {
                 match self.step {
                     SetupStep::Source => {
-                        self.source_selection.select_previous();
+                        self.source_state.source_list_state.select_previous();
                     }
-                    SetupStep::Config => {}
+                    SetupStep::Config(_) => {}
                     SetupStep::Done => {}
                 }
                 Ok(SetupAction::Continue)
@@ -66,20 +118,18 @@ impl SourceSetup {
             KeyCode::Down => {
                 match self.step {
                     SetupStep::Source => {
-                        self.source_selection.select_next();
+                        self.source_state.source_list_state.select_next();
                     }
-                    SetupStep::Config => {}
+                    SetupStep::Config(_) => {}
                     SetupStep::Done => {}
                 }
                 Ok(SetupAction::Continue)
             }
-            KeyCode::Backspace if !matches!(self.step, SetupStep::Source | SetupStep::Config) => {
+            KeyCode::Backspace if matches!(self.step, SetupStep::Config(_)) => {
                 self.input.pop();
                 Ok(SetupAction::Continue)
             }
-            KeyCode::Char(character)
-                if !matches!(self.step, SetupStep::Source | SetupStep::Config) =>
-            {
+            KeyCode::Char(character) if matches!(self.step, SetupStep::Config(_)) => {
                 self.input.push(character);
                 Ok(SetupAction::Continue)
             }
@@ -91,10 +141,11 @@ impl SourceSetup {
     fn advance(&mut self) -> Result<SetupAction, Error> {
         match self.step {
             SetupStep::Source => {
-                self.step = self.step.next();
+                let source_kind = self.source_state.source_list_state.selected().into();
+                self.step = SetupStep::Config(source_kind);
                 Ok(SetupAction::Continue)
             }
-            SetupStep::Config => Ok(SetupAction::Continue),
+            SetupStep::Config(_) => Ok(SetupAction::Continue),
             SetupStep::Done => {
                 // TODO: Create DataSource from configured values
                 let source = DataSource::Tcp(TcpConfig {
@@ -107,29 +158,11 @@ impl SourceSetup {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum SetupStep {
     Source,
-    Config,
+    Config(SourceKind),
     Done,
-}
-
-impl SetupStep {
-    fn next(&self) -> Self {
-        match self {
-            Self::Source => Self::Config,
-            Self::Config => Self::Done,
-            Self::Done => Self::Done,
-        }
-    }
-
-    fn prev(&self) -> Self {
-        match self {
-            Self::Source => Self::Source,
-            Self::Config => Self::Source,
-            Self::Done => Self::Config,
-        }
-    }
 }
 
 pub enum SetupAction {
@@ -138,11 +171,22 @@ pub enum SetupAction {
     Complete(DataSource),
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum SourceKind {
     Tcp,
     Serial,
     File,
+}
+
+impl From<Option<usize>> for SourceKind {
+    fn from(value: Option<usize>) -> Self {
+        match value {
+            Some(0) => SourceKind::Tcp,
+            Some(1) => SourceKind::Serial,
+            Some(2) => SourceKind::File,
+            _ => SourceKind::Tcp,
+        }
+    }
 }
 
 impl SourceKind {

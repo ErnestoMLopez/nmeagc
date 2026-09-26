@@ -238,7 +238,7 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
 
     match app.source_setup.step {
         SetupStep::Source => render_interactive_setup_source(app, frame, setup_area),
-        SetupStep::Config => render_interactive_setup_config(app, frame, area),
+        SetupStep::Config(_) => render_interactive_setup_config(app, frame, area),
         SetupStep::Done => {}
     }
 
@@ -250,17 +250,14 @@ fn render_interactive_setup_source(app: &mut App, frame: &mut Frame, area: Rect)
     let area = area.inner(Margin::new(2, 1));
     let list_area = area.inner(Margin::new(0, 2));
 
-    let source_list = List::new(SourceKind::ALL.iter().map(|src| src.as_str()))
+    let list = List::new(SourceKind::ALL.iter().map(|src| src.as_str()))
         .style(THEME.popups)
         .highlight_style(THEME.popups.reversed())
         .highlight_symbol(">> ");
+    let list_state = &mut app.source_setup.source_state.source_list_state;
 
     frame.render_widget(Text::from("Select a data source:"), area);
-    frame.render_stateful_widget(
-        source_list,
-        list_area,
-        &mut app.source_setup.source_selection,
-    );
+    frame.render_stateful_widget(list, list_area, list_state);
 }
 
 fn render_interactive_setup_config(_app: &mut App, _frame: &mut Frame, _area: Rect) {}

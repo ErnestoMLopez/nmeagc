@@ -4,9 +4,9 @@ use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, builder::Styles};
 use serialport::{DataBits, FlowControl, Parity, StopBits};
 
 #[derive(Parser, Debug)]
-#[command(version, about, long_about = None, disable_help_flag = true, flatten_help = true, styles = Styles::default())]
+#[command(version, about, long_about = None, disable_help_flag = true, flatten_help = true, arg_required_else_help = true, styles = Styles::default())]
 pub struct Cli {
-    /// Executes the client in interactive mode
+    /// Execute the client in interactive mode
     ///
     /// Interactive mode allows configuring the source of the NMEA data to setup a reader directly from the TUI.
     #[arg(short, long)]
@@ -24,8 +24,6 @@ pub struct Cli {
 #[derive(Subcommand, Debug)]
 pub enum DataSource {
     /// Establish a TCP connection to a host to use it as NMEA data source.
-    ///
-    /// This is the default option if no command is specified.
     #[command(short_flag = 't')]
     Tcp(TcpConfig),
     /// Open a serial port to read NMEA data from it.
@@ -73,7 +71,7 @@ pub struct SerialConfig {
 
 #[derive(Args, Debug)]
 pub struct FileConfig {
-    /// File path for the NMEA data source
+    /// File path
     pub path: PathBuf,
 }
 
@@ -151,14 +149,16 @@ mod tests {
     use clap::Parser;
 
     #[test]
-    fn default_source_is_tcp() {
-        let source = Cli::try_parse_from(["nmeagc"]).unwrap().source;
+    fn help_is_printed_without_arguments() {
+        let result = Cli::try_parse_from(["nmeagc"]);
 
-        assert!(matches!(
-            source,
-            DataSource::Tcp(TcpConfig { host, port })
-                if host == "127.0.0.1" && port == 23000
-        ));
+        assert!(result.is_err());
+        let error = result.unwrap_err();
+        assert_eq!(
+            error.kind(),
+            clap::error::ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand
+        );
+        assert!(error.to_string().contains("Usage:"));
     }
 
     #[test]

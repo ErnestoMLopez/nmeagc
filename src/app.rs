@@ -1,9 +1,12 @@
+use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
 
 use std::{
-    io::BufReader,
+    fs::File,
+    io::{BufReader, Read},
+    net::TcpStream,
     sync::{Arc, Mutex},
     thread,
     time::Duration,
@@ -17,7 +20,6 @@ use crossterm::event::{
 };
 use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
-use serialport::{DataBits, FlowControl, Parity, StopBits};
 use strum::{Display, EnumIter, FromRepr};
 
 /// Maximum amount of NMEA sentences to store and render in the raw data tab
@@ -28,6 +30,8 @@ const MAX_RAW_NMEA_LOGS: usize = 1000;
 pub struct App {
     /// Indicates if the application is running.
     pub running: bool,
+    /// Indicates if the client was started in interactive mode for the source configuration
+    pub interactive_setup: bool,
     /// Last recorded mouse position (for hovering detection)
     pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
@@ -42,13 +46,16 @@ pub struct App {
     pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
     /// NMEA parser and data (shared between the event handler and the application).
     pub nmea_data: Arc<Mutex<Nmea>>,
+    /// Selected NMEA data source.
+    pub source: DataSource,
 }
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new() -> Self {
-        Self {
+    pub fn new(args: Cli) -> Self {
+        let app = Self {
             running: true,
+            interactive_setup: args.interactive,
             mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
@@ -56,7 +63,17 @@ impl App {
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
+            source: args.source,
+        };
+
+        // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
+        // after the main loop started. Otherwise, the interactive setup would run and send this
+        // message after completion
+        if !app.interactive_setup {
+            app.event_handler.send(AppEvent::ReaderSetupReady);
         }
+
+        app
     }
 
     /// Setup a reader to receive NMEA data
@@ -64,21 +81,26 @@ impl App {
     /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
     /// parsing and event generation is done in a thread loop.
     pub fn setup_reader(&mut self) -> Result<()> {
-        // Opening the serial port to listen for NMEA data
-        // TODO: Specify port configuration from CLI arguments or from initial dialog box
-        // TODO: Pass port configuration from the application main thread
-        // TODO: Support for reading NMEA data from file (the use of BufReader simplifies this)
-        let port = serialport::new("/tmp/ttyV1", 4800)
-            .data_bits(DataBits::Eight)
-            .flow_control(FlowControl::None)
-            .parity(Parity::None)
-            .stop_bits(StopBits::One)
-            .exclusive(false)
-            .timeout(Duration::MAX)
-            .open()
-            .wrap_err("Error opening serial port")?;
+        let input: Box<dyn Read + Send> = match &self.source {
+            DataSource::Tcp(config) => {
+                let address = (&*config.host, config.port);
+                Box::new(TcpStream::connect(address).wrap_err("Error opening TCP stream")?)
+            }
+            DataSource::Serial(config) => {
+                let builder = serialport::new(&config.serial_path, config.baudrate)
+                    .data_bits(config.data_bits.into())
+                    .flow_control(config.flow_control.into())
+                    .parity(config.parity.into())
+                    .stop_bits(config.stop_bits.into())
+                    .timeout(Duration::from_millis(config.timeout.unwrap_or(u64::MAX)));
+                Box::new(builder.open().wrap_err("Error opening serial port")?)
+            }
+            DataSource::File(config) => {
+                Box::new(File::open(&config.path).wrap_err("Error opening file")?)
+            }
+        };
 
-        let reader = BufReader::new(port);
+        let reader = BufReader::new(input);
         let handler = self.event_handler.create_actor();
         let parser = Arc::clone(&self.nmea_data);
 
@@ -89,8 +111,6 @@ impl App {
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        self.setup_reader()?;
-
         while self.running {
             terminal.draw(|frame| self.render(frame))?;
             self.handle_events()?;
@@ -110,6 +130,7 @@ impl App {
             },
             Event::App(app_event) => match app_event {
                 AppEvent::Quit => self.quit(),
+                AppEvent::ReaderSetupReady => self.setup_reader()?,
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
@@ -187,6 +208,8 @@ impl App {
 pub enum AppEvent {
     /// Quit the application.
     Quit,
+    /// Configuration for reader setup finished
+    ReaderSetupReady,
     /// NMEA message received.
     NmeaMessage(SentenceType),
     /// Raw NMEA sentence for raw data logging.

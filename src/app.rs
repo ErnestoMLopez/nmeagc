@@ -31,7 +31,7 @@ pub struct App {
     /// Indicates if the application is running.
     pub running: bool,
     /// Indicates if the client was started in interactive mode for the source configuration
-    pub interactive: bool,
+    pub interactive_setup: bool,
     /// Last recorded mouse position (for hovering detection)
     pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
@@ -53,9 +53,9 @@ pub struct App {
 impl App {
     /// Constructs a new instance of [`App`].
     pub fn new(args: Cli) -> Self {
-        Self {
+        let app = Self {
             running: true,
-            interactive: args.interactive,
+            interactive_setup: args.interactive,
             mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
@@ -64,7 +64,16 @@ impl App {
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
             source: args.source,
+        };
+
+        // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
+        // after the main loop started. Otherwise, the interactive setup would run and send this
+        // message after completion
+        if !app.interactive_setup {
+            app.event_handler.send(AppEvent::ReaderSetupReady);
         }
+
+        app
     }
 
     /// Setup a reader to receive NMEA data
@@ -102,8 +111,6 @@ impl App {
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        self.setup_reader()?;
-
         while self.running {
             terminal.draw(|frame| self.render(frame))?;
             self.handle_events()?;
@@ -123,6 +130,7 @@ impl App {
             },
             Event::App(app_event) => match app_event {
                 AppEvent::Quit => self.quit(),
+                AppEvent::ReaderSetupReady => self.setup_reader()?,
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
@@ -200,6 +208,8 @@ impl App {
 pub enum AppEvent {
     /// Quit the application.
     Quit,
+    /// Configuration for reader setup finished
+    ReaderSetupReady,
     /// NMEA message received.
     NmeaMessage(SentenceType),
     /// Raw NMEA sentence for raw data logging.

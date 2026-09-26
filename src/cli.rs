@@ -6,7 +6,7 @@ use serialport::{DataBits, FlowControl, Parity, StopBits};
 #[derive(Parser, Debug)]
 #[command(version, about, long_about = None, disable_help_flag = true, flatten_help = true, arg_required_else_help = true, styles = Styles::default())]
 pub struct Cli {
-    /// Execute the client in interactive mode
+    /// Execute the client in interactive setup mode
     ///
     /// Interactive mode allows configuring the source of the NMEA data to setup a reader directly from the TUI.
     #[arg(short, long)]

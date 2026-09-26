@@ -6,6 +6,7 @@ pub struct Theme {
     pub app_title: Style,
     pub tabs: Style,
     pub tabs_selected: Style,
+    pub popups: Style,
     pub borders: Style,
     pub description: Style,
     pub description_title: Style,
@@ -31,6 +32,7 @@ pub const THEME: Theme = Theme {
         .bg(DARK_BLUE)
         .add_modifier(Modifier::BOLD)
         .add_modifier(Modifier::REVERSED),
+    popups: Style::new().fg(MID_BLUE).bg(GRAY),
     borders: Style::new().fg(LIGHT_GRAY),
     description: Style::new().fg(LIGHT_GRAY).bg(DARK_BLUE),
     description_title: Style::new().fg(LIGHT_GRAY).add_modifier(Modifier::BOLD),
@@ -49,7 +51,8 @@ const MID_BLUE: Color = Color::Rgb(31, 39, 63);
 // const LIGHT_RED: Color = Color::Rgb(192, 96, 96);
 // const RED: Color = Color::Rgb(215, 0, 0);
 const BLACK: Color = Color::Rgb(8, 8, 8); // not really black, often #080808
-const DARK_GRAY: Color = Color::Rgb(68, 68, 68);
+const GRAY: Color = Color::Rgb(149, 149, 149); // rgb(149, 149, 149)
+const DARK_GRAY: Color = Color::Rgb(68, 68, 68); // rgb(68, 68, 68)
 const MID_GRAY: Color = Color::Rgb(128, 128, 128);
 const LIGHT_GRAY: Color = Color::Rgb(188, 188, 188);
 const WHITE: Color = Color::Rgb(238, 238, 238); // not really white, often #eeeeee

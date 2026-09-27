@@ -1,6 +1,6 @@
 use crate::app::{App, AppTab};
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
-use crate::setup::{SetupStep, SourceKind};
+use crate::setup::{ConfigTcpOption, SetupStep, SourceKind};
 use crate::theme::THEME;
 use crate::widgets::{
     signals_monitor::{SignalInfo, SignalsMonitor},
@@ -8,6 +8,7 @@ use crate::widgets::{
 };
 
 use clap::{crate_name, crate_version};
+use ratatui::text::Span;
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Rect},
@@ -237,8 +238,10 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
     let app_name = format! {"{} {}", crate_name!(), crate_version!()};
 
     match app.source_setup.step {
-        SetupStep::Source => render_interactive_setup_source(app, frame, setup_area),
-        SetupStep::Config(_) => render_interactive_setup_config(app, frame, area),
+        SetupStep::Source => render_setup_source(app, frame, setup_area),
+        SetupStep::Config(SourceKind::Tcp) => render_setup_config_tcp(app, frame, setup_area),
+        SetupStep::Config(SourceKind::Serial) => render_setup_config_serial(app, frame, setup_area),
+        SetupStep::Config(SourceKind::File) => render_setup_config_file(app, frame, setup_area),
         SetupStep::Done => {}
     }
 
@@ -246,21 +249,57 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(Text::from(app_name).bold().centered(), app_name_area);
 }
 
-fn render_interactive_setup_source(app: &mut App, frame: &mut Frame, area: Rect) {
+fn render_setup_source(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
     let list_area = area.inner(Margin::new(0, 2));
 
     let list = List::new(SourceKind::ALL.iter().map(|src| src.as_str()))
         .style(THEME.popups)
         .highlight_style(THEME.popups.reversed())
-        .highlight_symbol(">> ");
+        .highlight_symbol("> ");
     let list_state = &mut app.source_setup.source_state.source_list_state;
 
     frame.render_widget(Text::from("Select a data source:"), area);
     frame.render_stateful_widget(list, list_area, list_state);
 }
 
-fn render_interactive_setup_config(_app: &mut App, _frame: &mut Frame, _area: Rect) {}
+fn render_setup_config_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 2));
+
+    let (host_line, port_line) = match app.source_setup.config_tcp_state.option {
+        ConfigTcpOption::Host => {
+            let host_line = Line::from(vec![
+                Span::from("Host: "),
+                Span::from(app.source_setup.config_tcp_state.input.as_str()),
+            ]);
+            let port_line = Line::from(vec![
+                Span::from("Port: "),
+                Span::from(format!("{}", app.source_setup.config_tcp_state.port)),
+            ]);
+            (host_line, port_line)
+        }
+        ConfigTcpOption::Port => {
+            let host_line = Line::from(vec![
+                Span::from("Host: "),
+                Span::from(app.source_setup.config_tcp_state.input.as_str()),
+            ]);
+            let port_line = Line::from(vec![
+                Span::from("Port: "),
+                Span::from(format!("{}", app.source_setup.config_tcp_state.port)),
+            ]);
+            (host_line, port_line)
+        }
+    };
+
+    let options = Text::from(vec![host_line, port_line]);
+
+    frame.render_widget(Text::from("Enter TCP stream configuration:"), area);
+    frame.render_widget(options, options_area);
+}
+
+fn render_setup_config_serial(_app: &mut App, _frame: &mut Frame, _area: Rect) {}
+fn render_setup_config_file(_app: &mut App, _frame: &mut Frame, _area: Rect) {}
 
 impl<'a> From<&RawNmeaLog> for Line<'a> {
     fn from(log: &RawNmeaLog) -> Self {

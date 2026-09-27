@@ -37,6 +37,17 @@ pub enum ConfigTcpOption {
     Port,
 }
 
+impl ConfigTcpOption {
+    pub const ALL: [Self; 2] = [ConfigTcpOption::Host, ConfigTcpOption::Port];
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            ConfigTcpOption::Host => "Host",
+            ConfigTcpOption::Port => "Port",
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct ConfigSerialState {
     pub option: ConfigSerialOption,
@@ -68,6 +79,7 @@ pub enum ConfigSerialOption {
 
 #[derive(Debug)]
 pub struct ConfigFileState {
+    pub input: String,
     pub path: PathBuf,
 }
 
@@ -113,6 +125,7 @@ impl Default for ConfigSerialState {
 impl Default for ConfigFileState {
     fn default() -> Self {
         Self {
+            input: String::new(),
             path: PathBuf::new(),
         }
     }
@@ -161,11 +174,33 @@ impl SourceSetup {
                 Ok(SetupAction::Continue)
             }
             KeyCode::Backspace if matches!(self.step, SetupStep::Config(_)) => {
-                self.input.pop();
+                match self.step {
+                    SetupStep::Config(SourceKind::Tcp) => {
+                        self.config_tcp_state.input.pop();
+                    }
+                    SetupStep::Config(SourceKind::Serial) => {
+                        self.config_serial_state.input.pop();
+                    }
+                    SetupStep::Config(SourceKind::File) => {
+                        self.config_file_state.input.pop();
+                    }
+                    _ => {}
+                }
                 Ok(SetupAction::Continue)
             }
             KeyCode::Char(character) if matches!(self.step, SetupStep::Config(_)) => {
-                self.input.push(character);
+                match self.step {
+                    SetupStep::Config(SourceKind::Tcp) => {
+                        self.config_tcp_state.input.push(character);
+                    }
+                    SetupStep::Config(SourceKind::Serial) => {
+                        self.config_serial_state.input.push(character);
+                    }
+                    SetupStep::Config(SourceKind::File) => {
+                        self.config_file_state.input.push(character);
+                    }
+                    _ => {}
+                }
                 Ok(SetupAction::Continue)
             }
             KeyCode::Enter => self.advance(),

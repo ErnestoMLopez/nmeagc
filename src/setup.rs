@@ -2,7 +2,7 @@ use crate::cli::{CliDataBits, CliFlowControl, CliParity, CliStopBits, DataSource
 
 use std::path::PathBuf;
 
-use color_eyre::eyre::{Error, Ok};
+use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 use ratatui::widgets::ListState;
 
@@ -24,12 +24,27 @@ pub struct SourceState {
 
 #[derive(Debug)]
 pub struct ConfigTcpState {
+    pub option: ConfigTcpOption,
+    pub input: String,
     pub host: String,
     pub port: u16,
 }
 
+#[derive(Debug, Default)]
+pub enum ConfigTcpOption {
+    #[default]
+    Host,
+    Port,
+}
+
 #[derive(Debug)]
 pub struct ConfigSerialState {
+    pub option: ConfigSerialOption,
+    pub input: String,
+    pub data_bits_list_state: ListState,
+    pub parity_list_state: ListState,
+    pub stop_bits_list_state: ListState,
+    pub flow_control_list_state: ListState,
     pub path: String,
     pub baudrate: u32,
     pub data_bits: CliDataBits,
@@ -37,6 +52,18 @@ pub struct ConfigSerialState {
     pub stop_bits: CliStopBits,
     pub flow_control: CliFlowControl,
     pub timeout: Option<u64>,
+}
+
+#[derive(Debug, Default)]
+pub enum ConfigSerialOption {
+    #[default]
+    Path,
+    Baudrate,
+    DataBits,
+    Parity,
+    StopBits,
+    FlowControl,
+    Timeout,
 }
 
 #[derive(Debug)]
@@ -55,6 +82,8 @@ impl Default for SourceState {
 impl Default for ConfigTcpState {
     fn default() -> Self {
         Self {
+            option: ConfigTcpOption::default(),
+            input: String::new(),
             host: "127.0.0.1".to_string(),
             port: 23000,
         }
@@ -64,6 +93,12 @@ impl Default for ConfigTcpState {
 impl Default for ConfigSerialState {
     fn default() -> Self {
         Self {
+            option: ConfigSerialOption::default(),
+            input: String::new(),
+            data_bits_list_state: ListState::default(),
+            parity_list_state: ListState::default(),
+            stop_bits_list_state: ListState::default(),
+            flow_control_list_state: ListState::default(),
             path: String::new(),
             baudrate: 9600,
             data_bits: CliDataBits::Eight,

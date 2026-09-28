@@ -1,6 +1,6 @@
 use crate::app::{App, AppTab};
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
-use crate::setup::{ConfigTcpOption, SetupStep, SourceKind};
+use crate::setup::{ConfigInput, ConfigItem, SetupStep, SourceKind, TcpOption};
 use crate::theme::THEME;
 use crate::widgets::{
     signals_monitor::{SignalInfo, SignalsMonitor},
@@ -239,10 +239,12 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
 
     match app.source_setup.step {
         SetupStep::Source => render_setup_source(app, frame, setup_area),
-        SetupStep::Config(SourceKind::Tcp) => render_setup_config_tcp(app, frame, setup_area),
-        SetupStep::Config(SourceKind::Serial) => render_setup_config_serial(app, frame, setup_area),
-        SetupStep::Config(SourceKind::File) => render_setup_config_file(app, frame, setup_area),
-        SetupStep::Done => {}
+        SetupStep::Config(ConfigItem::Tcp(_)) => render_setup_config_tcp(app, frame, setup_area),
+        SetupStep::Config(ConfigItem::Serial(_)) => {
+            render_setup_config_serial(app, frame, setup_area)
+        }
+        SetupStep::Config(ConfigItem::File(_)) => render_setup_config_file(app, frame, setup_area),
+        _ => {}
     }
 
     frame.render_widget(block, area);
@@ -267,28 +269,31 @@ fn render_setup_config_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
     let options_area = area.inner(Margin::new(2, 2));
 
-    let (host_line, port_line) = match app.source_setup.config_tcp_state.option {
-        ConfigTcpOption::Host => {
-            let host_line = Line::from(vec![
-                Span::from("Host: "),
-                Span::from(app.source_setup.config_tcp_state.input.as_str()),
-            ]);
+    let input_str = if let ConfigInput::Text(ref text_input) = app.source_setup.config_input {
+        text_input.input.as_str()
+    } else {
+        ""
+    };
+
+    let (host_line, port_line) = match app.source_setup.step {
+        SetupStep::Config(ConfigItem::Tcp(TcpOption::Host)) => {
+            let host_line = Line::from(vec![Span::from("Host: "), Span::from(input_str)]);
             let port_line = Line::from(vec![
                 Span::from("Port: "),
-                Span::from(format!("{}", app.source_setup.config_tcp_state.port)),
+                Span::from(format!("{}", app.source_setup.config_tcp.port)),
             ]);
             (host_line, port_line)
         }
-        ConfigTcpOption::Port => {
-            let host_line = Line::from(vec![
-                Span::from("Host: "),
-                Span::from(app.source_setup.config_tcp_state.input.as_str()),
-            ]);
+        SetupStep::Config(ConfigItem::Tcp(TcpOption::Port)) => {
+            let host_line = Line::from(vec![Span::from("Host: "), Span::from(input_str)]);
             let port_line = Line::from(vec![
                 Span::from("Port: "),
-                Span::from(format!("{}", app.source_setup.config_tcp_state.port)),
+                Span::from(format!("{}", app.source_setup.config_tcp.port)),
             ]);
             (host_line, port_line)
+        }
+        _ => {
+            return;
         }
     };
 

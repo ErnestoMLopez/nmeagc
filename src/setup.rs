@@ -10,125 +10,11 @@ use ratatui::widgets::ListState;
 pub struct SourceSetup {
     pub step: SetupStep,
     pub source_state: SourceState,
-    pub config_tcp_state: ConfigTcpState,
-    pub config_serial_state: ConfigSerialState,
-    pub config_file_state: ConfigFileState,
-    pub input: String,
+    pub config_tcp: ConfigTcp,
+    pub config_serial: ConfigSerial,
+    pub config_file: ConfigFile,
+    pub config_input: ConfigInput,
     pub error: Option<&'static str>,
-}
-
-#[derive(Debug)]
-pub struct SourceState {
-    pub source_list_state: ListState,
-}
-
-#[derive(Debug)]
-pub struct ConfigTcpState {
-    pub option: ConfigTcpOption,
-    pub input: String,
-    pub host: String,
-    pub port: u16,
-}
-
-#[derive(Debug, Default)]
-pub enum ConfigTcpOption {
-    #[default]
-    Host,
-    Port,
-}
-
-impl ConfigTcpOption {
-    pub const ALL: [Self; 2] = [ConfigTcpOption::Host, ConfigTcpOption::Port];
-
-    pub fn as_str(&self) -> &'static str {
-        match self {
-            ConfigTcpOption::Host => "Host",
-            ConfigTcpOption::Port => "Port",
-        }
-    }
-}
-
-#[derive(Debug)]
-pub struct ConfigSerialState {
-    pub option: ConfigSerialOption,
-    pub input: String,
-    pub data_bits_list_state: ListState,
-    pub parity_list_state: ListState,
-    pub stop_bits_list_state: ListState,
-    pub flow_control_list_state: ListState,
-    pub path: String,
-    pub baudrate: u32,
-    pub data_bits: CliDataBits,
-    pub parity: CliParity,
-    pub stop_bits: CliStopBits,
-    pub flow_control: CliFlowControl,
-    pub timeout: Option<u64>,
-}
-
-#[derive(Debug, Default)]
-pub enum ConfigSerialOption {
-    #[default]
-    Path,
-    Baudrate,
-    DataBits,
-    Parity,
-    StopBits,
-    FlowControl,
-    Timeout,
-}
-
-#[derive(Debug)]
-pub struct ConfigFileState {
-    pub input: String,
-    pub path: PathBuf,
-}
-
-impl Default for SourceState {
-    fn default() -> Self {
-        Self {
-            source_list_state: ListState::default().with_selected(Some(0)),
-        }
-    }
-}
-
-impl Default for ConfigTcpState {
-    fn default() -> Self {
-        Self {
-            option: ConfigTcpOption::default(),
-            input: String::new(),
-            host: "127.0.0.1".to_string(),
-            port: 23000,
-        }
-    }
-}
-
-impl Default for ConfigSerialState {
-    fn default() -> Self {
-        Self {
-            option: ConfigSerialOption::default(),
-            input: String::new(),
-            data_bits_list_state: ListState::default(),
-            parity_list_state: ListState::default(),
-            stop_bits_list_state: ListState::default(),
-            flow_control_list_state: ListState::default(),
-            path: String::new(),
-            baudrate: 9600,
-            data_bits: CliDataBits::Eight,
-            parity: CliParity::Odd,
-            stop_bits: CliStopBits::One,
-            flow_control: CliFlowControl::None,
-            timeout: None,
-        }
-    }
-}
-
-impl Default for ConfigFileState {
-    fn default() -> Self {
-        Self {
-            input: String::new(),
-            path: PathBuf::new(),
-        }
-    }
 }
 
 impl Default for SourceSetup {
@@ -136,10 +22,10 @@ impl Default for SourceSetup {
         Self {
             step: SetupStep::Source,
             source_state: SourceState::default(),
-            config_tcp_state: ConfigTcpState::default(),
-            config_serial_state: ConfigSerialState::default(),
-            config_file_state: ConfigFileState::default(),
-            input: String::new(),
+            config_tcp: ConfigTcp::default(),
+            config_serial: ConfigSerial::default(),
+            config_file: ConfigFile::default(),
+            config_input: ConfigInput::Text(TextInput::default()),
             error: None,
         }
     }
@@ -173,33 +59,15 @@ impl SourceSetup {
                 }
                 Ok(SetupAction::Continue)
             }
-            KeyCode::Backspace if matches!(self.step, SetupStep::Config(_)) => {
-                match self.step {
-                    SetupStep::Config(SourceKind::Tcp) => {
-                        self.config_tcp_state.input.pop();
-                    }
-                    SetupStep::Config(SourceKind::Serial) => {
-                        self.config_serial_state.input.pop();
-                    }
-                    SetupStep::Config(SourceKind::File) => {
-                        self.config_file_state.input.pop();
-                    }
-                    _ => {}
+            KeyCode::Backspace => {
+                if let ConfigInput::Text(ref mut text_input) = self.config_input {
+                    text_input.input.pop();
                 }
                 Ok(SetupAction::Continue)
             }
-            KeyCode::Char(character) if matches!(self.step, SetupStep::Config(_)) => {
-                match self.step {
-                    SetupStep::Config(SourceKind::Tcp) => {
-                        self.config_tcp_state.input.push(character);
-                    }
-                    SetupStep::Config(SourceKind::Serial) => {
-                        self.config_serial_state.input.push(character);
-                    }
-                    SetupStep::Config(SourceKind::File) => {
-                        self.config_file_state.input.push(character);
-                    }
-                    _ => {}
+            KeyCode::Char(character) => {
+                if let ConfigInput::Text(ref mut text_input) = self.config_input {
+                    text_input.input.push(character);
                 }
                 Ok(SetupAction::Continue)
             }
@@ -211,8 +79,8 @@ impl SourceSetup {
     fn advance(&mut self) -> Result<SetupAction, Error> {
         match self.step {
             SetupStep::Source => {
-                let source_kind = self.source_state.source_list_state.selected().into();
-                self.step = SetupStep::Config(source_kind);
+                let config_item = self.source_state.source_list_state.selected().into();
+                self.step = SetupStep::Config(config_item);
                 Ok(SetupAction::Continue)
             }
             SetupStep::Config(_) => Ok(SetupAction::Continue),
@@ -228,10 +96,133 @@ impl SourceSetup {
     }
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Default)]
+pub struct TextInput {
+    pub input: String,
+    pub cursor: usize,
+}
+
+#[derive(Debug, Default)]
+pub struct SelectableInput {
+    pub list_state: ListState,
+}
+
+#[derive(Debug)]
+pub enum ConfigInput {
+    Text(TextInput),
+    Selectable(SelectableInput),
+}
+
+#[derive(Debug)]
+pub struct SourceState {
+    pub source_list_state: ListState,
+}
+
+impl Default for SourceState {
+    fn default() -> Self {
+        Self {
+            source_list_state: ListState::default().with_selected(Some(0)),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct ConfigTcp {
+    pub host: String,
+    pub port: u16,
+}
+
+#[derive(Debug)]
+pub struct ConfigSerial {
+    pub path: String,
+    pub baudrate: u32,
+    pub data_bits: CliDataBits,
+    pub parity: CliParity,
+    pub stop_bits: CliStopBits,
+    pub flow_control: CliFlowControl,
+    pub timeout: Option<u64>,
+}
+
+#[derive(Debug)]
+pub struct ConfigFile {
+    pub path: PathBuf,
+}
+
+impl Default for ConfigTcp {
+    fn default() -> Self {
+        Self {
+            host: "127.0.0.1".to_string(),
+            port: 23000,
+        }
+    }
+}
+
+impl Default for ConfigSerial {
+    fn default() -> Self {
+        Self {
+            path: String::new(),
+            baudrate: 9600,
+            data_bits: CliDataBits::Eight,
+            parity: CliParity::Odd,
+            stop_bits: CliStopBits::One,
+            flow_control: CliFlowControl::None,
+            timeout: None,
+        }
+    }
+}
+
+impl Default for ConfigFile {
+    fn default() -> Self {
+        Self {
+            path: PathBuf::new(),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum TcpOption {
+    Host,
+    Port,
+}
+
+#[derive(Debug)]
+pub enum SerialOption {
+    Path,
+    Baudrate,
+    DataBits,
+    Parity,
+    StopBits,
+    FlowControl,
+    Timeout,
+}
+
+#[derive(Debug)]
+pub enum FileOption {
+    Path,
+}
+
+#[derive(Debug)]
+pub enum ConfigItem {
+    Tcp(TcpOption),
+    Serial(SerialOption),
+    File(FileOption),
+}
+
+impl From<Option<usize>> for ConfigItem {
+    fn from(value: Option<usize>) -> Self {
+        match value {
+            Some(0) => ConfigItem::Tcp(TcpOption::Host),
+            Some(1) => ConfigItem::Serial(SerialOption::Path),
+            Some(2) => ConfigItem::File(FileOption::Path),
+            _ => ConfigItem::Tcp(TcpOption::Host),
+        }
+    }
+}
+
+#[derive(Debug)]
 pub enum SetupStep {
     Source,
-    Config(SourceKind),
+    Config(ConfigItem),
     Done,
 }
 
@@ -241,22 +232,11 @@ pub enum SetupAction {
     Complete(DataSource),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug)]
 pub enum SourceKind {
     Tcp,
     Serial,
     File,
-}
-
-impl From<Option<usize>> for SourceKind {
-    fn from(value: Option<usize>) -> Self {
-        match value {
-            Some(0) => SourceKind::Tcp,
-            Some(1) => SourceKind::Serial,
-            Some(2) => SourceKind::File,
-            _ => SourceKind::Tcp,
-        }
-    }
 }
 
 impl SourceKind {

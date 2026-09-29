@@ -259,7 +259,7 @@ fn render_setup_source(app: &mut App, frame: &mut Frame, area: Rect) {
         .style(THEME.popups)
         .highlight_style(THEME.popups.reversed())
         .highlight_symbol("> ");
-    let list_state = &mut app.source_setup.source_state.source_list_state;
+    let list_state = &mut app.source_setup.source_input.list_state;
 
     frame.render_widget(Text::from("Select a data source:"), area);
     frame.render_stateful_widget(list, list_area, list_state);

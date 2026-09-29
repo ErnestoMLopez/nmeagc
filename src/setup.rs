@@ -9,7 +9,7 @@ use ratatui::widgets::ListState;
 #[derive(Debug)]
 pub struct SourceSetup {
     pub step: SetupStep,
-    pub source_state: SourceState,
+    pub source_input: SelectableInput,
     pub config_tcp: ConfigTcp,
     pub config_serial: ConfigSerial,
     pub config_file: ConfigFile,
@@ -21,7 +21,7 @@ impl Default for SourceSetup {
     fn default() -> Self {
         Self {
             step: SetupStep::Source,
-            source_state: SourceState::default(),
+            source_input: SelectableInput::default(),
             config_tcp: ConfigTcp::default(),
             config_serial: ConfigSerial::default(),
             config_file: ConfigFile::default(),
@@ -84,7 +84,7 @@ impl SourceSetup {
             KeyCode::Up => {
                 match self.step {
                     SetupStep::Source => {
-                        self.source_state.source_list_state.select_previous();
+                        self.source_input.list_state.select_previous();
                     }
                     SetupStep::Config(_) => {}
                     SetupStep::Done => {}
@@ -94,7 +94,7 @@ impl SourceSetup {
             KeyCode::Down => {
                 match self.step {
                     SetupStep::Source => {
-                        self.source_state.source_list_state.select_next();
+                        self.source_input.list_state.select_next();
                     }
                     SetupStep::Config(_) => {}
                     SetupStep::Done => {}
@@ -121,7 +121,7 @@ impl SourceSetup {
     fn advance(&mut self) -> Result<SetupAction, Error> {
         match self.step {
             SetupStep::Source => {
-                let config_item = self.source_state.source_list_state.selected().into();
+                let config_item = self.source_input.list_state.selected().into();
                 self.step = SetupStep::Config(config_item);
                 Ok(SetupAction::Continue)
             }
@@ -144,7 +144,7 @@ pub struct TextInput {
     pub cursor: usize,
 }
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct SelectableInput {
     pub list_state: ListState,
 }
@@ -155,15 +155,10 @@ pub enum ConfigInput {
     Selectable(SelectableInput),
 }
 
-#[derive(Debug)]
-pub struct SourceState {
-    pub source_list_state: ListState,
-}
-
-impl Default for SourceState {
+impl Default for SelectableInput {
     fn default() -> Self {
         Self {
-            source_list_state: ListState::default().with_selected(Some(0)),
+            list_state: ListState::default().with_selected(Some(0)),
         }
     }
 }

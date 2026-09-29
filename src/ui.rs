@@ -285,11 +285,11 @@ fn render_setup_config_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
             (host_line, port_line)
         }
         SetupStep::Config(ConfigItem::Tcp(TcpOption::Port)) => {
-            let host_line = Line::from(vec![Span::from("Host: "), Span::from(input_str)]);
-            let port_line = Line::from(vec![
-                Span::from("Port: "),
-                Span::from(format!("{}", app.source_setup.config_tcp.port)),
+            let host_line = Line::from(vec![
+                Span::from("Host: "),
+                Span::from(app.source_setup.config_tcp.host.clone()),
             ]);
+            let port_line = Line::from(vec![Span::from("Port: "), Span::from(input_str)]);
             (host_line, port_line)
         }
         _ => {

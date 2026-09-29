@@ -1,6 +1,4 @@
-use crate::cli::{CliDataBits, CliFlowControl, CliParity, CliStopBits, DataSource, TcpConfig};
-
-use std::path::PathBuf;
+use crate::cli::{DataSource, TcpConfig};
 
 use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
@@ -13,7 +11,6 @@ pub struct SourceSetup {
     pub config_tcp: ConfigTcp,
     pub config_serial: ConfigSerial,
     pub config_file: ConfigFile,
-    pub config_input: ConfigInput,
     pub error: Option<&'static str>,
 }
 
@@ -25,7 +22,6 @@ impl Default for SourceSetup {
             config_tcp: ConfigTcp::default(),
             config_serial: ConfigSerial::default(),
             config_file: ConfigFile::default(),
-            config_input: ConfigInput::Text(TextInput::default()),
             error: None,
         }
     }
@@ -43,18 +39,9 @@ impl SourceSetup {
                 if let SetupStep::Config(ref mut config_item) = self.step {
                     match config_item {
                         ConfigItem::Tcp(TcpOption::Host) => {
-                            if let ConfigInput::Text(ref mut text) = self.config_input {
-                                self.config_tcp.host = text.input.clone();
-                                text.input.clear();
-                            }
                             *config_item = ConfigItem::Tcp(TcpOption::Port);
                         }
-                        ConfigItem::Tcp(TcpOption::Port) => {
-                            if let ConfigInput::Text(ref mut text) = self.config_input {
-                                self.config_tcp.port = text.input.parse().unwrap_or(23000);
-                                text.input.clear();
-                            }
-                        }
+                        ConfigItem::Tcp(TcpOption::Port) => {}
                         _ => {}
                     }
                 }
@@ -63,17 +50,8 @@ impl SourceSetup {
             KeyCode::BackTab => {
                 if let SetupStep::Config(ref mut config_item) = self.step {
                     match config_item {
-                        ConfigItem::Tcp(TcpOption::Host) => {
-                            if let ConfigInput::Text(ref mut text) = self.config_input {
-                                self.config_tcp.host = text.input.clone();
-                                text.input.clear();
-                            }
-                        }
+                        ConfigItem::Tcp(TcpOption::Host) => {}
                         ConfigItem::Tcp(TcpOption::Port) => {
-                            if let ConfigInput::Text(ref mut text) = self.config_input {
-                                self.config_tcp.port = text.input.parse().unwrap_or(23000);
-                                text.input.clear();
-                            }
                             *config_item = ConfigItem::Tcp(TcpOption::Host);
                         }
                         _ => {}
@@ -102,13 +80,13 @@ impl SourceSetup {
                 Ok(SetupAction::Continue)
             }
             KeyCode::Backspace => {
-                if let ConfigInput::Text(ref mut text_input) = self.config_input {
+                if let Some(ref mut text_input) = self.get_text_input_mut() {
                     text_input.input.pop();
                 }
                 Ok(SetupAction::Continue)
             }
             KeyCode::Char(character) => {
-                if let ConfigInput::Text(ref mut text_input) = self.config_input {
+                if let Some(ref mut text_input) = self.get_text_input_mut() {
                     text_input.input.push(character);
                 }
                 Ok(SetupAction::Continue)
@@ -127,13 +105,45 @@ impl SourceSetup {
             }
             SetupStep::Config(ConfigItem::Tcp(_)) => {
                 let source = DataSource::Tcp(TcpConfig {
-                    host: self.config_tcp.host.clone(),
-                    port: self.config_tcp.port,
+                    host: self.config_tcp.host.input.clone(),
+                    port: self.config_tcp.port.input.parse()?,
                 });
                 self.step = SetupStep::Done;
                 Ok(SetupAction::Complete(source))
             }
             _ => Ok(SetupAction::Continue),
+        }
+    }
+
+    pub fn get_text_input(&self) -> Option<&TextInput> {
+        match self.step {
+            SetupStep::Config(ConfigItem::Tcp(TcpOption::Host)) => Some(&self.config_tcp.host),
+            SetupStep::Config(ConfigItem::Tcp(TcpOption::Port)) => Some(&self.config_tcp.port),
+            SetupStep::Config(ConfigItem::Serial(SerialOption::Path)) => {
+                Some(&self.config_serial.path)
+            }
+            SetupStep::Config(ConfigItem::Serial(SerialOption::Timeout)) => {
+                Some(&self.config_serial.timeout)
+            }
+            SetupStep::Config(ConfigItem::File(FileOption::Path)) => Some(&self.config_file.path),
+            _ => None,
+        }
+    }
+
+    pub fn get_text_input_mut(&mut self) -> Option<&mut TextInput> {
+        match self.step {
+            SetupStep::Config(ConfigItem::Tcp(TcpOption::Host)) => Some(&mut self.config_tcp.host),
+            SetupStep::Config(ConfigItem::Tcp(TcpOption::Port)) => Some(&mut self.config_tcp.port),
+            SetupStep::Config(ConfigItem::Serial(SerialOption::Path)) => {
+                Some(&mut self.config_serial.path)
+            }
+            SetupStep::Config(ConfigItem::Serial(SerialOption::Timeout)) => {
+                Some(&mut self.config_serial.timeout)
+            }
+            SetupStep::Config(ConfigItem::File(FileOption::Path)) => {
+                Some(&mut self.config_file.path)
+            }
+            _ => None,
         }
     }
 }
@@ -150,9 +160,8 @@ pub struct SelectableInput {
 }
 
 #[derive(Debug)]
-pub enum ConfigInput {
-    Text(TextInput),
-    Selectable(SelectableInput),
+pub struct CheckeableInput {
+    pub is_active: bool,
 }
 
 impl Default for SelectableInput {
@@ -165,31 +174,38 @@ impl Default for SelectableInput {
 
 #[derive(Debug)]
 pub struct ConfigTcp {
-    pub host: String,
-    pub port: u16,
+    pub host: TextInput,
+    pub port: TextInput,
 }
 
 #[derive(Debug)]
 pub struct ConfigSerial {
-    pub path: String,
-    pub baudrate: u32,
-    pub data_bits: CliDataBits,
-    pub parity: CliParity,
-    pub stop_bits: CliStopBits,
-    pub flow_control: CliFlowControl,
-    pub timeout: Option<u64>,
+    pub path: TextInput,
+    pub baudrate: SelectableInput,
+    pub data_bits: SelectableInput,
+    pub parity: SelectableInput,
+    pub stop_bits: SelectableInput,
+    pub flow_control: SelectableInput,
+    pub timeout: TextInput,
+    pub exclusive: CheckeableInput,
 }
 
 #[derive(Debug)]
 pub struct ConfigFile {
-    pub path: PathBuf,
+    pub path: TextInput,
 }
 
 impl Default for ConfigTcp {
     fn default() -> Self {
         Self {
-            host: "127.0.0.1".to_string(),
-            port: 23000,
+            host: TextInput {
+                input: "127.0.0.1".to_string(),
+                cursor: 0,
+            },
+            port: TextInput {
+                input: "23000".to_string(),
+                cursor: 0,
+            },
         }
     }
 }
@@ -197,13 +213,20 @@ impl Default for ConfigTcp {
 impl Default for ConfigSerial {
     fn default() -> Self {
         Self {
-            path: String::new(),
-            baudrate: 9600,
-            data_bits: CliDataBits::Eight,
-            parity: CliParity::Odd,
-            stop_bits: CliStopBits::One,
-            flow_control: CliFlowControl::None,
-            timeout: None,
+            path: TextInput {
+                input: String::new(),
+                cursor: 0,
+            },
+            baudrate: SelectableInput::default(),
+            data_bits: SelectableInput::default(),
+            parity: SelectableInput::default(),
+            stop_bits: SelectableInput::default(),
+            flow_control: SelectableInput::default(),
+            timeout: TextInput {
+                input: String::new(),
+                cursor: 0,
+            },
+            exclusive: CheckeableInput { is_active: false },
         }
     }
 }
@@ -211,7 +234,10 @@ impl Default for ConfigSerial {
 impl Default for ConfigFile {
     fn default() -> Self {
         Self {
-            path: PathBuf::new(),
+            path: TextInput {
+                input: String::new(),
+                cursor: 0,
+            },
         }
     }
 }

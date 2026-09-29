@@ -1,6 +1,6 @@
 use crate::app::{App, AppTab};
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
-use crate::setup::{ConfigInput, ConfigItem, SetupStep, SourceKind, TcpOption};
+use crate::setup::{ConfigItem, SetupStep, SourceKind, TcpOption};
 use crate::theme::THEME;
 use crate::widgets::{
     signals_monitor::{SignalInfo, SignalsMonitor},
@@ -269,7 +269,7 @@ fn render_setup_config_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
     let options_area = area.inner(Margin::new(2, 2));
 
-    let input_str = if let ConfigInput::Text(ref text_input) = app.source_setup.config_input {
+    let input_str = if let Some(text_input) = app.source_setup.get_text_input() {
         text_input.input.as_str()
     } else {
         ""
@@ -280,14 +280,22 @@ fn render_setup_config_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
             let host_line = Line::from(vec![Span::from("Host: "), Span::from(input_str)]);
             let port_line = Line::from(vec![
                 Span::from("Port: "),
-                Span::from(format!("{}", app.source_setup.config_tcp.port)),
+                Span::from(format!(
+                    "{}",
+                    app.source_setup
+                        .config_tcp
+                        .port
+                        .input
+                        .parse::<u16>()
+                        .unwrap_or_default()
+                )),
             ]);
             (host_line, port_line)
         }
         SetupStep::Config(ConfigItem::Tcp(TcpOption::Port)) => {
             let host_line = Line::from(vec![
                 Span::from("Host: "),
-                Span::from(app.source_setup.config_tcp.host.clone()),
+                Span::from(app.source_setup.config_tcp.host.input.clone()),
             ]);
             let port_line = Line::from(vec![Span::from("Port: "), Span::from(input_str)]);
             (host_line, port_line)

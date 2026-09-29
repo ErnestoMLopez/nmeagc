@@ -67,7 +67,7 @@ impl App {
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
-            source: args.source,
+            source: args.source.unwrap_or_default(),
         };
 
         // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly

@@ -18,7 +18,7 @@ pub struct Cli {
 
     /// Specifies the source and configuration of the NMEA data.
     #[command(subcommand)]
-    pub source: DataSource,
+    pub source: Option<DataSource>,
 }
 
 #[derive(Subcommand, Debug)]
@@ -32,6 +32,15 @@ pub enum DataSource {
     /// Open a file to read NMEA data from it.
     #[command(short_flag = 'f')]
     File(FileConfig),
+}
+
+impl Default for DataSource {
+    fn default() -> Self {
+        Self::Tcp(TcpConfig {
+            host: "127.0.0.1".to_string(),
+            port: 23000,
+        })
+    }
 }
 
 #[derive(Args, Debug)]
@@ -169,7 +178,7 @@ mod tests {
 
         assert!(matches!(
             source,
-            DataSource::Serial(SerialConfig {
+            Some(DataSource::Serial(SerialConfig {
                 serial_path: path,
                 baudrate: 9600,
                 data_bits: CliDataBits::Eight,
@@ -177,7 +186,7 @@ mod tests {
                 stop_bits: CliStopBits::One,
                 flow_control: CliFlowControl::None,
                 timeout: None,
-            }) if path == "/dev/ttyUSB0"
+            })) if path == "/dev/ttyUSB0"
         ));
     }
 
@@ -189,7 +198,7 @@ mod tests {
 
         assert!(matches!(
             source,
-            DataSource::File(FileConfig { path }) if path == PathBuf::from("track.nmea")
+            Some(DataSource::File(FileConfig { path })) if path == PathBuf::from("track.nmea")
         ));
     }
 

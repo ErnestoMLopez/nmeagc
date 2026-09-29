@@ -39,6 +39,48 @@ impl SourceSetup {
 
         match key.code {
             KeyCode::Esc => Ok(SetupAction::Cancel),
+            KeyCode::Tab => {
+                if let SetupStep::Config(ref mut config_item) = self.step {
+                    match config_item {
+                        ConfigItem::Tcp(TcpOption::Host) => {
+                            if let ConfigInput::Text(ref mut text) = self.config_input {
+                                self.config_tcp.host = text.input.clone();
+                                text.input.clear();
+                            }
+                            *config_item = ConfigItem::Tcp(TcpOption::Port);
+                        }
+                        ConfigItem::Tcp(TcpOption::Port) => {
+                            if let ConfigInput::Text(ref mut text) = self.config_input {
+                                self.config_tcp.port = text.input.parse().unwrap_or(23000);
+                                text.input.clear();
+                            }
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(SetupAction::Continue)
+            }
+            KeyCode::BackTab => {
+                if let SetupStep::Config(ref mut config_item) = self.step {
+                    match config_item {
+                        ConfigItem::Tcp(TcpOption::Host) => {
+                            if let ConfigInput::Text(ref mut text) = self.config_input {
+                                self.config_tcp.host = text.input.clone();
+                                text.input.clear();
+                            }
+                        }
+                        ConfigItem::Tcp(TcpOption::Port) => {
+                            if let ConfigInput::Text(ref mut text) = self.config_input {
+                                self.config_tcp.port = text.input.parse().unwrap_or(23000);
+                                text.input.clear();
+                            }
+                            *config_item = ConfigItem::Tcp(TcpOption::Host);
+                        }
+                        _ => {}
+                    }
+                }
+                Ok(SetupAction::Continue)
+            }
             KeyCode::Up => {
                 match self.step {
                     SetupStep::Source => {
@@ -83,15 +125,15 @@ impl SourceSetup {
                 self.step = SetupStep::Config(config_item);
                 Ok(SetupAction::Continue)
             }
-            SetupStep::Config(_) => Ok(SetupAction::Continue),
-            SetupStep::Done => {
-                // TODO: Create DataSource from configured values
+            SetupStep::Config(ConfigItem::Tcp(_)) => {
                 let source = DataSource::Tcp(TcpConfig {
-                    host: "127.0.0.1".to_string(),
-                    port: 23000,
+                    host: self.config_tcp.host.clone(),
+                    port: self.config_tcp.port,
                 });
+                self.step = SetupStep::Done;
                 Ok(SetupAction::Complete(source))
             }
+            _ => Ok(SetupAction::Continue),
         }
     }
 }

@@ -21,7 +21,7 @@ pub struct Cli {
     pub source: Option<DataSource>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DataSource {
     /// Establish a TCP connection to a host to use it as NMEA data source.
     #[command(short_flag = 't')]
@@ -43,7 +43,7 @@ impl Default for DataSource {
     }
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct TcpConfig {
     /// Host name for the TCP data source
     #[arg(short, long, default_value_t = "127.0.0.1".to_string(), value_name = "HOST")]
@@ -53,7 +53,7 @@ pub struct TcpConfig {
     pub port: u16,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct SerialConfig {
     /// Serial port path
     #[arg(display_order = 0, value_name = "PATH")]
@@ -78,7 +78,7 @@ pub struct SerialConfig {
     pub timeout: Option<u64>,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone)]
 pub struct FileConfig {
     /// File path
     pub path: PathBuf,

@@ -159,7 +159,7 @@ pub struct SelectableInput {
     pub list_state: ListState,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Default)]
 pub struct CheckeableInput {
     pub is_active: bool,
 }
@@ -213,20 +213,14 @@ impl Default for ConfigTcp {
 impl Default for ConfigSerial {
     fn default() -> Self {
         Self {
-            path: TextInput {
-                input: String::new(),
-                cursor: 0,
-            },
+            path: TextInput::default(),
             baudrate: SelectableInput::default(),
             data_bits: SelectableInput::default(),
             parity: SelectableInput::default(),
             stop_bits: SelectableInput::default(),
             flow_control: SelectableInput::default(),
-            timeout: TextInput {
-                input: String::new(),
-                cursor: 0,
-            },
-            exclusive: CheckeableInput { is_active: false },
+            timeout: TextInput::default(),
+            exclusive: CheckeableInput::default(),
         }
     }
 }
@@ -234,10 +228,7 @@ impl Default for ConfigSerial {
 impl Default for ConfigFile {
     fn default() -> Self {
         Self {
-            path: TextInput {
-                input: String::new(),
-                cursor: 0,
-            },
+            path: TextInput::default(),
         }
     }
 }

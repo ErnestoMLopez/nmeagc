@@ -39,15 +39,9 @@ impl<'a> Widget for Form<'a> {
         // Layout for fields and submit button. Selectable fields can have variable height, and they
         // hide following fields values when opened.
         let mut fields_area = inner_area;
-        let mut skipped_fields: u16 = 0;
 
         for field in &self.fields {
             let field_height = field.height();
-            skipped_fields = skipped_fields.saturating_sub(1);
-            if skipped_fields > 0 {
-                continue;
-            }
-            skipped_fields = field_height;
             let layout = Layout::vertical([Constraint::Length(field_height), Constraint::Min(0)]);
             let [top, bottom] = fields_area.layout(&layout);
             field.render_ref(top, buf);
@@ -55,9 +49,13 @@ impl<'a> Widget for Form<'a> {
         }
 
         // Render submit button
-        if fields_area.height > 1 {
-            // self.render_submit_button(layout[submit_idx], buf);
-        }
+        // let layout = Layout::vertical([
+        //     Constraint::Length(1),
+        //     Constraint::Length(1),
+        //     Constraint::Min(0),
+        // ]);
+        // let [_, button, _] = fields_area.layout(&layout);
+        // self.render_submit_button(button, buf);
 
         // Render validation errors summary if any
         if !self.validation_errors.is_empty() {

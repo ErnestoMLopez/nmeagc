@@ -1,13 +1,15 @@
-use crate::cli::{DataSource, TcpConfig};
+use crate::{
+    cli::{DataSource, TcpConfig},
+    widgets::field::{checkbox::CheckboxInput, choice::ChoiceInput, text::TextInput},
+};
 
 use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
-use ratatui::widgets::ListState;
 
 #[derive(Debug)]
 pub struct SourceSetup {
     pub step: SetupStep,
-    pub source_input: SelectableInput,
+    pub source_input: ChoiceInput,
     pub config_tcp: ConfigTcp,
     pub config_serial: ConfigSerial,
     pub config_file: ConfigFile,
@@ -18,7 +20,7 @@ impl Default for SourceSetup {
     fn default() -> Self {
         Self {
             step: SetupStep::Source,
-            source_input: SelectableInput::default(),
+            source_input: ChoiceInput::default(),
             config_tcp: ConfigTcp::default(),
             config_serial: ConfigSerial::default(),
             config_file: ConfigFile::default(),
@@ -148,30 +150,6 @@ impl SourceSetup {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct TextInput {
-    pub input: String,
-    pub cursor: usize,
-}
-
-#[derive(Debug)]
-pub struct SelectableInput {
-    pub list_state: ListState,
-}
-
-#[derive(Debug, Default)]
-pub struct CheckeableInput {
-    pub is_active: bool,
-}
-
-impl Default for SelectableInput {
-    fn default() -> Self {
-        Self {
-            list_state: ListState::default().with_selected(Some(0)),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct ConfigTcp {
     pub host: TextInput,
@@ -181,13 +159,13 @@ pub struct ConfigTcp {
 #[derive(Debug)]
 pub struct ConfigSerial {
     pub path: TextInput,
-    pub baudrate: SelectableInput,
-    pub data_bits: SelectableInput,
-    pub parity: SelectableInput,
-    pub stop_bits: SelectableInput,
-    pub flow_control: SelectableInput,
+    pub baudrate: ChoiceInput,
+    pub data_bits: ChoiceInput,
+    pub parity: ChoiceInput,
+    pub stop_bits: ChoiceInput,
+    pub flow_control: ChoiceInput,
     pub timeout: TextInput,
-    pub exclusive: CheckeableInput,
+    pub exclusive: CheckboxInput,
 }
 
 #[derive(Debug)]
@@ -214,13 +192,13 @@ impl Default for ConfigSerial {
     fn default() -> Self {
         Self {
             path: TextInput::default(),
-            baudrate: SelectableInput::default(),
-            data_bits: SelectableInput::default(),
-            parity: SelectableInput::default(),
-            stop_bits: SelectableInput::default(),
-            flow_control: SelectableInput::default(),
+            baudrate: ChoiceInput::default(),
+            data_bits: ChoiceInput::default(),
+            parity: ChoiceInput::default(),
+            stop_bits: ChoiceInput::default(),
+            flow_control: ChoiceInput::default(),
             timeout: TextInput::default(),
-            exclusive: CheckeableInput::default(),
+            exclusive: CheckboxInput::default(),
         }
     }
 }

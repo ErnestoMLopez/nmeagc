@@ -16,6 +16,9 @@ pub trait Field: WidgetRef + Send + Sync {
     /// Handles keyboard input.
     fn handle_key_event(&mut self, event: &KeyEvent);
 
+    /// Focuses the field, allowing it to receive input and highlight it during rendering.
+    fn focus(&mut self);
+
     /// Makes the field value hidden, so it can be skipped during rendering.
     ///
     /// This is useful for fields that are not visible due to previous fields with variable height,

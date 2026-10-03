@@ -24,6 +24,21 @@ impl<'a> Form<'a> {
             validation_errors: Vec::new(),
         }
     }
+
+    pub fn field<T: Field + 'static>(mut self, field: T) -> Self {
+        self.fields.push(Box::new(field));
+        self
+    }
+
+    pub fn style(mut self, style: Style) -> Self {
+        self.style = style;
+        self
+    }
+
+    pub fn block(mut self, block: Block<'a>) -> Self {
+        self.block = Some(block);
+        self
+    }
 }
 
 impl<'a> Widget for Form<'a> {

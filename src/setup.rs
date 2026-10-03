@@ -1,6 +1,6 @@
 use crate::{
     cli::{DataSource, TcpConfig},
-    widgets::field::{checkbox::CheckboxInput, choice::ChoiceInput, text::TextInput},
+    widgets::field::{CheckboxInput, ChoiceInput, TextInput},
 };
 
 use color_eyre::eyre::Error;

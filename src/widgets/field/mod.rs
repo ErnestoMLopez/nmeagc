@@ -1,10 +1,13 @@
-pub mod checkbox;
-pub mod choice;
-pub mod text;
-
-use ratatui::widgets::WidgetRef;
+mod checkbox;
+mod choice;
+mod text;
 
 use crossterm::event::KeyEvent;
+use ratatui::widgets::WidgetRef;
+
+pub use checkbox::CheckboxInput;
+pub use choice::ChoiceInput;
+pub use text::TextInput;
 
 pub trait Field: WidgetRef + Send + Sync {
     /// Returns the display label for this field.

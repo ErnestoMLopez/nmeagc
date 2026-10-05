@@ -44,7 +44,7 @@ impl ChoiceInput {
     /// This is a fluent setter method, but must be called after the options were setted through the
     /// [`ChoiceInput::option()`] or [`ChoiceInput::options()`] methods, to correctly set the index
     /// to the selected option.
-    pub fn with_selection(mut self, value: &str) -> Self {
+    pub fn with_selected(mut self, value: &str) -> Self {
         for (i, (v, _)) in self.options.iter().enumerate() {
             if v == value {
                 self.selected = Some(i);
@@ -152,6 +152,14 @@ impl Field for ChoiceInput {
             Err(vec![format!("{} is required", self.label)])
         } else {
             Ok(())
+        }
+    }
+
+    fn height(&self) -> u16 {
+        if self.is_open {
+            1 + self.options.len() as u16
+        } else {
+            1
         }
     }
 

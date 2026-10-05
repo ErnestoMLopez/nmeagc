@@ -1,5 +1,6 @@
 use crate::{
     cli::{DataSource, TcpConfig},
+    theme::THEME,
     widgets::field::{CheckboxInput, ChoiceInput, TextInput},
 };
 
@@ -176,14 +177,14 @@ pub struct ConfigFile {
 impl Default for ConfigTcp {
     fn default() -> Self {
         Self {
-            host: TextInput {
-                input: "127.0.0.1".to_string(),
-                cursor: 0,
-            },
-            port: TextInput {
-                input: "23000".to_string(),
-                cursor: 0,
-            },
+            host: TextInput::new("Host")
+                .with_input("127.0.0.1")
+                .required()
+                .style(THEME.popups),
+            port: TextInput::new("Port")
+                .with_input("23000")
+                .required()
+                .style(THEME.popups),
         }
     }
 }
@@ -191,13 +192,13 @@ impl Default for ConfigTcp {
 impl Default for ConfigSerial {
     fn default() -> Self {
         Self {
-            path: TextInput::default(),
+            path: TextInput::new("Path").required().style(THEME.popups),
             baudrate: ChoiceInput::default(),
             data_bits: ChoiceInput::default(),
             parity: ChoiceInput::default(),
             stop_bits: ChoiceInput::default(),
             flow_control: ChoiceInput::default(),
-            timeout: TextInput::default(),
+            timeout: TextInput::new("Timeout").style(THEME.popups),
             exclusive: CheckboxInput::default(),
         }
     }
@@ -206,7 +207,7 @@ impl Default for ConfigSerial {
 impl Default for ConfigFile {
     fn default() -> Self {
         Self {
-            path: TextInput::default(),
+            path: TextInput::new("Path").required().style(THEME.popups),
         }
     }
 }

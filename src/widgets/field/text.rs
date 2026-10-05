@@ -36,6 +36,7 @@ impl TextInput {
         }
     }
 
+    /// Sets an initial value for the text input.
     pub fn with_input(mut self, input: impl Into<String>) -> Self {
         self.input = input.into();
         self

@@ -9,7 +9,7 @@ use ratatui::{
     widgets::{Widget, WidgetRef},
 };
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub struct CheckboxInput {
     label: String,
     style: Style,

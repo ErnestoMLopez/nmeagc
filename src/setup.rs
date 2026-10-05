@@ -21,7 +21,7 @@ impl Default for SourceSetup {
     fn default() -> Self {
         Self {
             step: SetupStep::Source,
-            source_input: ChoiceInput::default(),
+            source_input: ChoiceInput::new("Source"),
             config_tcp: ConfigTcp::default(),
             config_serial: ConfigSerial::default(),
             config_file: ConfigFile::default(),
@@ -65,7 +65,7 @@ impl SourceSetup {
             KeyCode::Up => {
                 match self.step {
                     SetupStep::Source => {
-                        self.source_input.list_state.select_previous();
+                        self.source_input.selection.select_previous();
                     }
                     SetupStep::Config(_) => {}
                     SetupStep::Done => {}
@@ -75,7 +75,7 @@ impl SourceSetup {
             KeyCode::Down => {
                 match self.step {
                     SetupStep::Source => {
-                        self.source_input.list_state.select_next();
+                        self.source_input.selection.select_next();
                     }
                     SetupStep::Config(_) => {}
                     SetupStep::Done => {}
@@ -102,7 +102,7 @@ impl SourceSetup {
     fn advance(&mut self) -> Result<SetupAction, Error> {
         match self.step {
             SetupStep::Source => {
-                let config_item = self.source_input.list_state.selected().into();
+                let config_item = self.source_input.selection.selected().into();
                 self.step = SetupStep::Config(config_item);
                 Ok(SetupAction::Continue)
             }
@@ -193,13 +193,13 @@ impl Default for ConfigSerial {
     fn default() -> Self {
         Self {
             path: TextInput::new("Path").required().style(THEME.popups),
-            baudrate: ChoiceInput::default(),
-            data_bits: ChoiceInput::default(),
-            parity: ChoiceInput::default(),
-            stop_bits: ChoiceInput::default(),
-            flow_control: ChoiceInput::default(),
+            baudrate: ChoiceInput::new("Baudrate"),
+            data_bits: ChoiceInput::new("Data bits"),
+            parity: ChoiceInput::new("Parity"),
+            stop_bits: ChoiceInput::new("Stop bits"),
+            flow_control: ChoiceInput::new("Flow control"),
             timeout: TextInput::new("Timeout").style(THEME.popups),
-            exclusive: CheckboxInput::default(),
+            exclusive: CheckboxInput::new("Exclusive"),
         }
     }
 }

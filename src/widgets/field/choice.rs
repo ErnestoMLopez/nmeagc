@@ -3,10 +3,10 @@ use crate::widgets::field::Field;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
+    layout::{Constraint, Layout, Offset, Rect, Size},
     style::{Modifier, Style},
-    text::{Line, Span},
-    widgets::{ListState, Widget, WidgetRef},
+    text::Span,
+    widgets::{List, ListState, Widget, WidgetRef},
 };
 
 #[derive(Debug)]
@@ -169,5 +169,64 @@ impl Field for ChoiceInput {
 }
 
 impl WidgetRef for ChoiceInput {
-    fn render_ref(&self, area: Rect, buf: &mut Buffer) {}
+    fn render_ref(&self, area: Rect, buf: &mut Buffer) {
+        if area.height < 1 || area.width < 1 {
+            return;
+        }
+
+        let label_style = if self.hidden {
+            self.style.add_modifier(Modifier::DIM)
+        } else {
+            self.style
+        };
+
+        let required_marker = if self.required { "*" } else { "" };
+        let label_text = format!("{}{}:", self.label, required_marker);
+        let label_span = Span::styled(&label_text, label_style);
+
+        let layout = Layout::horizontal([
+            Constraint::Length(label_text.len() as u16),
+            Constraint::Min(1),
+            Constraint::Fill(1),
+        ]);
+        let [label_area, _, input_area] = area.layout(&layout);
+
+        label_span.render(label_area, buf);
+
+        // If the field is hidden we don't render the input.
+        if self.hidden {
+            return;
+        }
+
+        let input_style = if self.focused {
+            self.style.add_modifier(Modifier::REVERSED)
+        } else {
+            self.style
+        };
+
+        let arrow = if self.is_open { " ▲" } else { " ▼" };
+        let input_text = self
+            .selected
+            .and_then(|i| self.options.get(i))
+            .map(|(_, display)| display.clone())
+            .unwrap_or("-- Select --".to_string())
+            + arrow;
+
+        let input = Span::styled(input_text, input_style);
+
+        input.render(input_area, buf);
+
+        // Render dropdown if open
+        if self.is_open && input_area.height > 1 {
+            let dropdown_area = input_area
+                .resize(Size::new(input_area.width, input_area.height - 1))
+                .offset(Offset::new(0, 1));
+
+            let dropdown = List::new(self.options.iter().map(|(_, option)| option.as_str()))
+                .style(input_style)
+                .highlight_style(input_style.reversed());
+
+            dropdown.render(dropdown_area, buf);
+        }
+    }
 }

@@ -116,7 +116,7 @@ impl WidgetRef for CheckboxInput {
 
         let layout = Layout::horizontal([
             Constraint::Length(3),
-            Constraint::Min(1),
+            Constraint::Max(1),
             Constraint::Fill(1),
         ]);
         let [check_area, _, label_area] = area.layout(&layout);

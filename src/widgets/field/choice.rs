@@ -186,7 +186,7 @@ impl WidgetRef for ChoiceInput {
 
         let layout = Layout::horizontal([
             Constraint::Length(label_text.len() as u16),
-            Constraint::Min(1),
+            Constraint::Max(1),
             Constraint::Fill(1),
         ]);
         let [label_area, _, input_area] = area.layout(&layout);

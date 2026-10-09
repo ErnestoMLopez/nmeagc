@@ -1,19 +1,21 @@
 use crate::{
     cli::{DataSource, TcpConfig},
     theme::THEME,
-    widgets::field::{CheckboxInput, ChoiceInput, TextInput},
+    widgets::{
+        field::{CheckboxInput, ChoiceInput, TextInput},
+        form::Form,
+    },
 };
 
 use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 
-#[derive(Debug)]
 pub struct SourceSetup {
     pub step: SetupStep,
     pub source_input: ChoiceInput,
-    pub config_tcp: ConfigTcp,
-    pub config_serial: ConfigSerial,
-    pub config_file: ConfigFile,
+    pub config_tcp: Form,
+    pub config_serial: Form,
+    pub config_file: Form,
     pub error: Option<&'static str>,
 }
 
@@ -22,9 +24,78 @@ impl Default for SourceSetup {
         Self {
             step: SetupStep::Source,
             source_input: ChoiceInput::new("Source"),
-            config_tcp: ConfigTcp::default(),
-            config_serial: ConfigSerial::default(),
-            config_file: ConfigFile::default(),
+            config_tcp: Form::new()
+                .style(THEME.popups)
+                .field(TextInput::new("Host").required().with_input("127.0.0.1"))
+                .field(
+                    TextInput::new("Port")
+                        .required()
+                        .with_input("23000")
+                        .style(THEME.popups),
+                ),
+            config_serial: Form::new()
+                .style(THEME.popups)
+                .field(TextInput::new("Path").required().style(THEME.popups))
+                .field(
+                    ChoiceInput::new("Baud rate")
+                        .options(vec![
+                            ("1200", "1200"),
+                            ("2400", "2400"),
+                            ("9600", "9600"),
+                            ("19200", "19200"),
+                            ("38400", "38400"),
+                            ("57600", "57600"),
+                            ("115200", "115200"),
+                            ("230400", "230400"),
+                            ("460800", "460800"),
+                            ("921600", "921600"),
+                        ])
+                        .with_selected("9600")
+                        .required()
+                        .style(THEME.popups),
+                )
+                .field(
+                    ChoiceInput::new("Data bits")
+                        .options(vec![
+                            ("Five", "5"),
+                            ("Six", "6"),
+                            ("Seven", "7"),
+                            ("Eight", "8"),
+                        ])
+                        .with_selected("Eight")
+                        .required()
+                        .style(THEME.popups),
+                )
+                .field(
+                    ChoiceInput::new("Parity")
+                        .options(vec![("None", "None"), ("Odd", "Odd"), ("Even", "Even")])
+                        .with_selected("None")
+                        .required()
+                        .style(THEME.popups),
+                )
+                .field(
+                    ChoiceInput::new("Stop bits")
+                        .options(vec![("One", "1"), ("Two", "2")])
+                        .with_selected("One")
+                        .required()
+                        .style(THEME.popups),
+                )
+                .field(
+                    ChoiceInput::new("Flow control")
+                        .options(vec![
+                            ("None", "None"),
+                            ("Sw", "Software"),
+                            ("Hw", "Hardware"),
+                        ])
+                        .with_selected("None")
+                        .required()
+                        .style(THEME.popups),
+                )
+                .field(TextInput::new("Timeout").style(THEME.popups))
+                .field(CheckboxInput::new("Exclusive").style(THEME.popups)),
+            config_file: Form::new()
+                .style(THEME.popups)
+                .field(TextInput::new("Path").required().style(THEME.popups)),
             error: None,
         }
     }
@@ -82,18 +153,8 @@ impl SourceSetup {
                 }
                 Ok(SetupAction::Continue)
             }
-            KeyCode::Backspace => {
-                if let Some(ref mut text_input) = self.get_text_input_mut() {
-                    text_input.input.pop();
-                }
-                Ok(SetupAction::Continue)
-            }
-            KeyCode::Char(character) => {
-                if let Some(ref mut text_input) = self.get_text_input_mut() {
-                    text_input.input.push(character);
-                }
-                Ok(SetupAction::Continue)
-            }
+            KeyCode::Backspace => Ok(SetupAction::Continue),
+            KeyCode::Char(_) => Ok(SetupAction::Continue),
             KeyCode::Enter => self.advance(),
             _ => Ok(SetupAction::Continue),
         }
@@ -108,45 +169,13 @@ impl SourceSetup {
             }
             SetupStep::Config(ConfigItem::Tcp(_)) => {
                 let source = DataSource::Tcp(TcpConfig {
-                    host: self.config_tcp.host.input.clone(),
-                    port: self.config_tcp.port.input.parse()?,
+                    host: "127.0.0.1".to_string(), // TODO Replace for form parsing
+                    port: 23000,
                 });
                 self.step = SetupStep::Done;
                 Ok(SetupAction::Complete(source))
             }
             _ => Ok(SetupAction::Continue),
-        }
-    }
-
-    pub fn get_text_input(&self) -> Option<&TextInput> {
-        match self.step {
-            SetupStep::Config(ConfigItem::Tcp(TcpOption::Host)) => Some(&self.config_tcp.host),
-            SetupStep::Config(ConfigItem::Tcp(TcpOption::Port)) => Some(&self.config_tcp.port),
-            SetupStep::Config(ConfigItem::Serial(SerialOption::Path)) => {
-                Some(&self.config_serial.path)
-            }
-            SetupStep::Config(ConfigItem::Serial(SerialOption::Timeout)) => {
-                Some(&self.config_serial.timeout)
-            }
-            SetupStep::Config(ConfigItem::File(FileOption::Path)) => Some(&self.config_file.path),
-            _ => None,
-        }
-    }
-
-    pub fn get_text_input_mut(&mut self) -> Option<&mut TextInput> {
-        match self.step {
-            SetupStep::Config(ConfigItem::Tcp(TcpOption::Host)) => Some(&mut self.config_tcp.host),
-            SetupStep::Config(ConfigItem::Tcp(TcpOption::Port)) => Some(&mut self.config_tcp.port),
-            SetupStep::Config(ConfigItem::Serial(SerialOption::Path)) => {
-                Some(&mut self.config_serial.path)
-            }
-            SetupStep::Config(ConfigItem::Serial(SerialOption::Timeout)) => {
-                Some(&mut self.config_serial.timeout)
-            }
-            SetupStep::Config(ConfigItem::File(FileOption::Path)) => {
-                Some(&mut self.config_file.path)
-            }
-            _ => None,
         }
     }
 }

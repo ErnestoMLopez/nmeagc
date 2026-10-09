@@ -34,7 +34,7 @@ impl Form {
     }
 }
 
-impl Widget for Form {
+impl Widget for &Form {
     fn render(self, area: Rect, buf: &mut Buffer) {
         // Layout for fields and submit button. Selectable fields can have variable height, and they
         // hide following fields values when opened.

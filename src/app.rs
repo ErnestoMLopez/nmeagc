@@ -27,7 +27,6 @@ use strum::{Display, EnumIter, FromRepr};
 const MAX_RAW_NMEA_LOGS: usize = 1000;
 
 /// Application.
-#[derive(Debug)]
 pub struct App {
     /// Indicates if the application is running.
     pub running: bool,

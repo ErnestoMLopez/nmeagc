@@ -5,21 +5,19 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::Style,
     text::{Line, Span},
-    widgets::{Block, BlockExt, Widget},
+    widgets::Widget,
 };
 
-pub struct Form<'a> {
+pub struct Form {
     fields: Vec<Box<dyn Field>>,
-    block: Option<Block<'a>>,
     style: Style,
     validation_errors: Vec<String>,
 }
 
-impl<'a> Form<'a> {
+impl Form {
     pub fn new() -> Self {
         Self {
             fields: Vec::new(),
-            block: None,
             style: Style::default(),
             validation_errors: Vec::new(),
         }
@@ -34,26 +32,13 @@ impl<'a> Form<'a> {
         self.style = style;
         self
     }
-
-    pub fn block(mut self, block: Block<'a>) -> Self {
-        self.block = Some(block);
-        self
-    }
 }
 
-impl<'a> Widget for Form<'a> {
+impl Widget for Form {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        let inner_area = self.block.inner_if_some(area);
-
-        self.block.as_ref().render(area, buf);
-
-        if inner_area.height < 2 || inner_area.width < 10 {
-            return;
-        }
-
         // Layout for fields and submit button. Selectable fields can have variable height, and they
         // hide following fields values when opened.
-        let mut fields_area = inner_area;
+        let mut fields_area = area;
 
         for field in &self.fields {
             let field_height = field.height();
@@ -82,9 +67,9 @@ impl<'a> Widget for Form<'a> {
             );
 
             let error_area = Rect {
-                x: inner_area.x,
-                y: inner_area.y + inner_area.height.saturating_sub(1),
-                width: inner_area.width,
+                x: area.x,
+                y: area.y + area.height.saturating_sub(1),
+                width: area.width,
                 height: 1,
             };
 

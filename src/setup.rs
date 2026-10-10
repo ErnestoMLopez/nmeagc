@@ -102,12 +102,12 @@ impl Default for SourceSetup {
 }
 
 impl SourceSetup {
-    pub fn handle_key(&mut self, key: KeyEvent) -> Result<SetupAction, Error> {
-        if key.kind != KeyEventKind::Press {
+    pub fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<SetupAction, Error> {
+        if key_event.kind != KeyEventKind::Press {
             return Ok(SetupAction::Continue);
         }
 
-        match key.code {
+        match key_event.code {
             KeyCode::Esc => Ok(SetupAction::Cancel),
             KeyCode::Tab => {
                 if let SetupStep::Config(ref mut config_item) = self.step {

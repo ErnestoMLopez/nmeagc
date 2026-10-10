@@ -148,7 +148,7 @@ impl App {
         }
 
         if self.interactive_setup {
-            match self.source_setup.handle_key(key_event)? {
+            match self.source_setup.handle_key_event(key_event)? {
                 SetupAction::Continue => {}
                 SetupAction::Cancel => {
                     self.event_handler.send(AppEvent::Quit);

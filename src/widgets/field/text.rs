@@ -73,6 +73,27 @@ impl TextInput {
             .saturating_add(1)
             .clamp(0, self.input.chars().count());
     }
+
+    fn enter_char(&mut self, character: char) {
+        let index = self
+            .input
+            .char_indices()
+            .map(|(i, _)| i)
+            .nth(self.cursor)
+            .unwrap_or(self.input.len());
+        self.input.insert(index, character);
+        self.move_cursor_right();
+    }
+
+    fn delete_char(&mut self) {
+        if self.cursor > 0 {
+            let prev_chars = self.input.chars().take(self.cursor - 1);
+            let next_chars = self.input.chars().skip(self.cursor);
+
+            self.input = prev_chars.chain(next_chars).collect();
+            self.move_cursor_left();
+        }
+    }
 }
 
 impl Field for TextInput {
@@ -83,35 +104,14 @@ impl Field for TextInput {
     fn handle_key_event(&mut self, event: &KeyEvent) {
         match event.code {
             KeyCode::Char(c) => {
-                let index = self
-                    .input
-                    .char_indices()
-                    .map(|(i, _)| i)
-                    .nth(self.cursor)
-                    .unwrap_or(self.input.len());
-                self.input.insert(index, c);
-                self.move_cursor_right();
+                self.enter_char(c);
             }
             KeyCode::Backspace => {
-                if self.cursor > 0 {
-                    let prev_chars_count = self.cursor - 1;
-                    let prev_chars = self.input.chars().take(prev_chars_count);
-                    let next_chars = self.input.chars().skip(self.cursor);
-
-                    self.input = prev_chars.chain(next_chars).collect();
-                    self.move_cursor_left();
-                }
+                self.delete_char();
             }
             KeyCode::Delete => {
-                if self.cursor < self.input.chars().count() {
-                    self.move_cursor_right();
-                    let prev_chars_count = self.cursor - 1;
-                    let prev_chars = self.input.chars().take(prev_chars_count);
-                    let next_chars = self.input.chars().skip(self.cursor);
-
-                    self.input = prev_chars.chain(next_chars).collect();
-                    self.move_cursor_left();
-                }
+                self.move_cursor_right();
+                self.delete_char();
             }
             KeyCode::Left => {
                 self.move_cursor_left();
@@ -123,7 +123,7 @@ impl Field for TextInput {
                 self.cursor = 0;
             }
             KeyCode::End => {
-                self.cursor = self.input.chars().count() + 1;
+                self.cursor = self.input.chars().count();
             }
             _ => {}
         }

@@ -6,7 +6,7 @@ use ratatui::{
     layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::Span,
-    widgets::{List, ListState, Widget, WidgetRef},
+    widgets::{List, ListState, StatefulWidget, Widget, WidgetRef},
 };
 
 #[derive(Debug)]
@@ -229,9 +229,11 @@ impl WidgetRef for ChoiceInput {
         if self.is_open && dropdown_area.height > 0 {
             let dropdown = List::new(self.options.iter().map(|(_, option)| option.as_str()))
                 .style(input_style)
-                .highlight_style(input_style.reversed());
+                .highlight_style(input_style.not_reversed().bold());
 
-            dropdown.render(dropdown_area, buf);
+            let mut state = ListState::default().with_selected(self.selected);
+
+            StatefulWidget::render(dropdown, dropdown_area, buf, &mut state);
         }
     }
 }

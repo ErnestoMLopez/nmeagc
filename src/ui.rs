@@ -236,6 +236,9 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
 
     let app_name = format! {"{} {}", crate_name!(), crate_version!()};
 
+    frame.render_widget(block, area);
+    frame.render_widget(Text::from(app_name).bold().centered(), app_name_area);
+
     match app.source_setup.step {
         SetupStep::Source => render_setup_source(app, frame, setup_area),
         SetupStep::Config(ConfigItem::Tcp(_)) => render_setup_config_tcp(app, frame, setup_area),
@@ -245,9 +248,6 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
         SetupStep::Config(ConfigItem::File(_)) => render_setup_config_file(app, frame, setup_area),
         _ => {}
     }
-
-    frame.render_widget(block, area);
-    frame.render_widget(Text::from(app_name).bold().centered(), app_name_area);
 }
 
 fn render_setup_source(app: &mut App, frame: &mut Frame, area: Rect) {

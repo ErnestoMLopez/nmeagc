@@ -200,21 +200,11 @@ impl WidgetRef for TextInput {
             (false, _) => Line::from(Span::styled(&input_text, input_style)),
             (true, None) => Line::from(vec![
                 Span::styled(&input_text, input_style),
-                Span::styled(
-                    " ",
-                    input_style
-                        .bg(Color::Gray)
-                        .add_modifier(Modifier::SLOW_BLINK),
-                ),
+                Span::styled(" ", input_style.bg(Color::Blue).fg(Color::White)),
             ]),
             (true, Some((cursor_index, c))) => Line::from(vec![
                 Span::styled(&input_text[..cursor_index], input_style),
-                Span::styled(
-                    c.to_string(),
-                    input_style
-                        .bg(Color::Gray)
-                        .add_modifier(Modifier::SLOW_BLINK),
-                ),
+                Span::styled(c.to_string(), input_style.bg(Color::Blue).fg(Color::White)),
                 Span::styled(&input_text[(cursor_index + c.len_utf8())..], input_style),
             ]),
         };

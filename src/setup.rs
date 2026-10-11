@@ -26,7 +26,12 @@ impl Default for SourceSetup {
             source_input: ChoiceInput::new("Source"),
             config_tcp: Form::new()
                 .style(THEME.popups)
-                .field(TextInput::new("Host").required().with_input("127.0.0.1"))
+                .field(
+                    TextInput::new("Host")
+                        .required()
+                        .with_input("127.0.0.1")
+                        .style(THEME.popups),
+                )
                 .field(
                     TextInput::new("Port")
                         .required()

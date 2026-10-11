@@ -1,6 +1,6 @@
 use crate::widgets::field::Field;
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -39,12 +39,10 @@ impl Form {
     pub fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Tab => {
-                if key_event.modifiers.contains(KeyModifiers::SHIFT) {
-                    self.focus_previous();
-                } else {
-                    self.focus_next();
-                }
-                return;
+                self.focus_next();
+            }
+            KeyCode::BackTab => {
+                self.focus_previous();
             }
             _ => {}
         }
@@ -59,12 +57,23 @@ impl Form {
     /// Moves focus to the next field or make the form out of focus.
     fn focus_next(&mut self) {
         self.focused_field = if let Some(index) = self.focused_field {
-            if index + 1 < self.fields.len() {
-                Some(index + 1)
+            if let Some(field) = self.fields.get_mut(index) {
+                field.focus(false);
+            }
+
+            if index < self.fields.len() - 1 {
+                let index = index + 1;
+                if let Some(field) = self.fields.get_mut(index) {
+                    field.focus(true);
+                }
+                Some(index)
             } else {
                 None
             }
         } else {
+            if let Some(field) = self.fields.get_mut(0) {
+                field.focus(true);
+            }
             Some(0)
         };
     }
@@ -72,9 +81,24 @@ impl Form {
     /// Moves focus to the previous field or make the form out of focus.
     fn focus_previous(&mut self) {
         self.focused_field = if let Some(index) = self.focused_field {
-            if index < 1 { Some(index - 1) } else { None }
+            if let Some(field) = self.fields.get_mut(index) {
+                field.focus(false);
+            }
+            if index > 0 {
+                let index = index - 1;
+                if let Some(field) = self.fields.get_mut(index) {
+                    field.focus(true);
+                }
+                Some(index)
+            } else {
+                None
+            }
         } else {
-            Some(self.fields.len().saturating_sub(1))
+            let index = self.fields.len().saturating_sub(1);
+            if let Some(field) = self.fields.get_mut(index) {
+                field.focus(true);
+            }
+            Some(index)
         };
     }
 }

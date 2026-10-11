@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style},
+    style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Widget, WidgetRef},
 };
@@ -188,20 +188,35 @@ impl WidgetRef for TextInput {
 
         // Render the input as a Line. If the field is focused, we change the style and also render
         // the blinking cursor as an individual Span
-        let input = if let (true, Some((start, c))) =
-            (self.focused, input_text.char_indices().nth(self.cursor))
-        {
-            let cursor_span = Span::styled(
-                c.to_string(),
-                self.style.add_modifier(Modifier::RAPID_BLINK),
-            );
-            Line::from(vec![
-                Span::styled(&input_text[..start], self.style.reversed()),
-                cursor_span,
-                Span::styled(&input_text[(start + c.len_utf8())..], self.style.reversed()),
-            ])
+        let input_style = if self.focused {
+            self.style.reversed()
         } else {
-            Line::from(Span::styled(&input_text, self.style))
+            self.style
+        };
+
+        buf.set_style(input_area, input_style);
+
+        let input = match (self.focused, input_text.char_indices().nth(self.cursor)) {
+            (false, _) => Line::from(Span::styled(&input_text, input_style)),
+            (true, None) => Line::from(vec![
+                Span::styled(&input_text, input_style),
+                Span::styled(
+                    " ",
+                    input_style
+                        .bg(Color::Gray)
+                        .add_modifier(Modifier::SLOW_BLINK),
+                ),
+            ]),
+            (true, Some((cursor_index, c))) => Line::from(vec![
+                Span::styled(&input_text[..cursor_index], input_style),
+                Span::styled(
+                    c.to_string(),
+                    input_style
+                        .bg(Color::Gray)
+                        .add_modifier(Modifier::SLOW_BLINK),
+                ),
+                Span::styled(&input_text[(cursor_index + c.len_utf8())..], input_style),
+            ]),
         };
 
         input.render(input_area, buf);

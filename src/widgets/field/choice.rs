@@ -139,8 +139,8 @@ impl Field for ChoiceInput {
         }
     }
 
-    fn focus(&mut self) {
-        self.focused = true;
+    fn focus(&mut self, focused: bool) {
+        self.focused = focused;
     }
 
     fn hidden(&mut self, hidden: bool) {

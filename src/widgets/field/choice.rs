@@ -3,7 +3,7 @@ use crate::widgets::field::Field;
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
-    layout::{Constraint, Layout, Offset, Rect, Size},
+    layout::{Constraint, Layout, Rect},
     style::{Modifier, Style},
     text::Span,
     widgets::{List, ListState, Widget, WidgetRef},
@@ -204,24 +204,29 @@ impl WidgetRef for ChoiceInput {
             self.style
         };
 
-        let arrow = if self.is_open { " ▲" } else { " ▼" };
+        let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
+        let [choice_area, dropdown_area] = input_area.layout(&layout);
+
+        let layout = Layout::horizontal([Constraint::Fill(1), Constraint::Length(3)]);
+        let [selected_area, arrow_area] = choice_area.layout(&layout);
+
         let input_text = self
             .selected
             .and_then(|i| self.options.get(i))
             .map(|(_, display)| display.clone())
-            .unwrap_or("-- Select --".to_string())
-            + arrow;
+            .unwrap_or("-- Select --".to_string());
+
+        // We set the style for all the area so the focus is visible even if the input is empty
+        buf.set_style(choice_area, input_style);
 
         let input = Span::styled(input_text, input_style);
+        let arrow = Span::styled(if self.is_open { "▲" } else { "▼" }, input_style);
 
-        input.render(input_area, buf);
+        input.render(selected_area, buf);
+        arrow.render(arrow_area, buf);
 
         // Render dropdown if open
-        if self.is_open && input_area.height > 1 {
-            let dropdown_area = input_area
-                .resize(Size::new(input_area.width, input_area.height - 1))
-                .offset(Offset::new(0, 1));
-
+        if self.is_open && dropdown_area.height > 0 {
             let dropdown = List::new(self.options.iter().map(|(_, option)| option.as_str()))
                 .style(input_style)
                 .highlight_style(input_style.reversed());

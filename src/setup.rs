@@ -67,21 +67,18 @@ impl Default for SourceSetup {
                             ("Seven", "7"),
                             ("Eight", "8"),
                         ])
-                        .with_selected("Eight")
                         .required()
                         .style(THEME.popups),
                 )
                 .field(
                     ChoiceInput::new("Parity")
                         .options(vec![("None", "None"), ("Odd", "Odd"), ("Even", "Even")])
-                        .with_selected("None")
                         .required()
                         .style(THEME.popups),
                 )
                 .field(
                     ChoiceInput::new("Stop bits")
                         .options(vec![("One", "1"), ("Two", "2")])
-                        .with_selected("One")
                         .required()
                         .style(THEME.popups),
                 )
@@ -92,7 +89,6 @@ impl Default for SourceSetup {
                             ("Sw", "Software"),
                             ("Hw", "Hardware"),
                         ])
-                        .with_selected("None")
                         .required()
                         .style(THEME.popups),
                 )

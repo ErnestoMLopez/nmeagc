@@ -194,6 +194,7 @@ impl WidgetRef for TextInput {
             self.style
         };
 
+        // We set the style for all the area so the focus is visible even if the input is empty
         buf.set_style(input_area, input_style);
 
         let input = match (self.focused, input_text.char_indices().nth(self.cursor)) {

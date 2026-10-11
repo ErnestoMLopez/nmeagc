@@ -1,5 +1,6 @@
 use crate::widgets::field::Field;
 
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
@@ -10,6 +11,7 @@ use ratatui::{
 
 pub struct Form {
     fields: Vec<Box<dyn Field>>,
+    focused_field: Option<usize>,
     style: Style,
     validation_errors: Vec<String>,
 }
@@ -18,6 +20,7 @@ impl Form {
     pub fn new() -> Self {
         Self {
             fields: Vec::new(),
+            focused_field: None,
             style: Style::default(),
             validation_errors: Vec::new(),
         }
@@ -31,6 +34,48 @@ impl Form {
     pub fn style(mut self, style: Style) -> Self {
         self.style = style;
         self
+    }
+
+    pub fn handle_key_event(&mut self, key_event: KeyEvent) {
+        match key_event.code {
+            KeyCode::Tab => {
+                if key_event.modifiers.contains(KeyModifiers::SHIFT) {
+                    self.focus_previous();
+                } else {
+                    self.focus_next();
+                }
+                return;
+            }
+            _ => {}
+        }
+
+        if let Some(index) = self.focused_field {
+            if let Some(field) = self.fields.get_mut(index) {
+                field.handle_key_event(&key_event);
+            }
+        }
+    }
+
+    /// Moves focus to the next field or make the form out of focus.
+    fn focus_next(&mut self) {
+        self.focused_field = if let Some(index) = self.focused_field {
+            if index + 1 < self.fields.len() {
+                Some(index + 1)
+            } else {
+                None
+            }
+        } else {
+            Some(0)
+        };
+    }
+
+    /// Moves focus to the previous field or make the form out of focus.
+    fn focus_previous(&mut self) {
+        self.focused_field = if let Some(index) = self.focused_field {
+            if index < 1 { Some(index - 1) } else { None }
+        } else {
+            Some(self.fields.len().saturating_sub(1))
+        };
     }
 }
 

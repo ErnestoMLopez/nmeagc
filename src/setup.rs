@@ -107,55 +107,37 @@ impl SourceSetup {
             return Ok(SetupAction::Continue);
         }
 
-        match key_event.code {
-            KeyCode::Esc => Ok(SetupAction::Cancel),
-            KeyCode::Tab => {
-                if let SetupStep::Config(ref mut config_item) = self.step {
-                    match config_item {
-                        ConfigItem::Tcp(TcpOption::Host) => {
-                            *config_item = ConfigItem::Tcp(TcpOption::Port);
-                        }
-                        ConfigItem::Tcp(TcpOption::Port) => {}
-                        _ => {}
-                    }
+        if let KeyCode::Esc = key_event.code {
+            return Ok(SetupAction::Cancel);
+        }
+
+        match self.step {
+            SetupStep::Source => match key_event.code {
+                KeyCode::Up => {
+                    self.source_input.selection.select_previous();
+                    return Ok(SetupAction::Continue);
                 }
+                KeyCode::Down => {
+                    self.source_input.selection.select_next();
+                    return Ok(SetupAction::Continue);
+                }
+                KeyCode::Enter => return self.advance(),
+                _ => {
+                    return Ok(SetupAction::Continue);
+                }
+            },
+            SetupStep::Config(ConfigItem::Tcp(_)) => {
+                self.config_tcp.handle_key_event(key_event);
                 Ok(SetupAction::Continue)
             }
-            KeyCode::BackTab => {
-                if let SetupStep::Config(ref mut config_item) = self.step {
-                    match config_item {
-                        ConfigItem::Tcp(TcpOption::Host) => {}
-                        ConfigItem::Tcp(TcpOption::Port) => {
-                            *config_item = ConfigItem::Tcp(TcpOption::Host);
-                        }
-                        _ => {}
-                    }
-                }
+            SetupStep::Config(ConfigItem::Serial(_)) => {
+                self.config_serial.handle_key_event(key_event);
                 Ok(SetupAction::Continue)
             }
-            KeyCode::Up => {
-                match self.step {
-                    SetupStep::Source => {
-                        self.source_input.selection.select_previous();
-                    }
-                    SetupStep::Config(_) => {}
-                    SetupStep::Done => {}
-                }
+            SetupStep::Config(ConfigItem::File(_)) => {
+                self.config_file.handle_key_event(key_event);
                 Ok(SetupAction::Continue)
             }
-            KeyCode::Down => {
-                match self.step {
-                    SetupStep::Source => {
-                        self.source_input.selection.select_next();
-                    }
-                    SetupStep::Config(_) => {}
-                    SetupStep::Done => {}
-                }
-                Ok(SetupAction::Continue)
-            }
-            KeyCode::Backspace => Ok(SetupAction::Continue),
-            KeyCode::Char(_) => Ok(SetupAction::Continue),
-            KeyCode::Enter => self.advance(),
             _ => Ok(SetupAction::Continue),
         }
     }

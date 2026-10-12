@@ -175,8 +175,17 @@ impl WidgetRef for TextInput {
 
         label_span.render(label_area, buf);
 
+        let input_style = if self.focused {
+            self.style.reversed()
+        } else {
+            self.style
+        };
+
+        // We set the style for all the area so the focus is visible even if the input is empty
+        buf.set_style(input_area, input_style);
+
         // If the field is hidden or the input is empty, we don't render the input.
-        if self.hidden || self.input.is_empty() {
+        if self.hidden {
             return;
         }
 
@@ -188,15 +197,6 @@ impl WidgetRef for TextInput {
 
         // Render the input as a Line. If the field is focused, we change the style and also render
         // the blinking cursor as an individual Span
-        let input_style = if self.focused {
-            self.style.reversed()
-        } else {
-            self.style
-        };
-
-        // We set the style for all the area so the focus is visible even if the input is empty
-        buf.set_style(input_area, input_style);
-
         let input = match (self.focused, input_text.char_indices().nth(self.cursor)) {
             (false, _) => Line::from(Span::styled(&input_text, input_style)),
             (true, None) => Line::from(vec![

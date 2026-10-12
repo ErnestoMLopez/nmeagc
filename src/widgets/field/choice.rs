@@ -128,12 +128,8 @@ impl Field for ChoiceInput {
             KeyCode::Up if self.is_open => {
                 self.move_highlight_up();
             }
-            KeyCode::Down => {
-                if self.is_open {
-                    self.move_highlight_down();
-                } else {
-                    self.toggle_open();
-                }
+            KeyCode::Down if self.is_open => {
+                self.move_highlight_down();
             }
             _ => {}
         }
@@ -231,7 +227,7 @@ impl WidgetRef for ChoiceInput {
                 .style(input_style)
                 .highlight_style(input_style.not_reversed().bold());
 
-            let mut state = ListState::default().with_selected(self.selected);
+            let mut state = ListState::default().with_selected(Some(self.highlighted));
 
             StatefulWidget::render(dropdown, dropdown_area, buf, &mut state);
         }

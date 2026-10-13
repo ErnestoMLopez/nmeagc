@@ -74,12 +74,13 @@ impl Field for CheckboxInput {
 
     fn highlight_style(&mut self, _style: Style) {}
 
-    fn handle_key_event(&mut self, event: &KeyEvent) {
+    fn handle_key_event(&mut self, event: &KeyEvent) -> bool {
         match event.code {
             KeyCode::Enter | KeyCode::Char(' ') => {
                 self.toggle();
+                true
             }
-            _ => {}
+            _ => false,
         }
     }
 

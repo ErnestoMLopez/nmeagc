@@ -105,31 +105,38 @@ impl Field for TextInput {
         self.highlighted_style = style;
     }
 
-    fn handle_key_event(&mut self, event: &KeyEvent) {
+    fn handle_key_event(&mut self, event: &KeyEvent) -> bool {
         match event.code {
             KeyCode::Char(c) => {
                 self.enter_char(c);
+                true
             }
             KeyCode::Backspace => {
                 self.delete_char();
+                true
             }
             KeyCode::Delete => {
                 self.move_cursor_right();
                 self.delete_char();
+                true
             }
             KeyCode::Left => {
                 self.move_cursor_left();
+                true
             }
             KeyCode::Right => {
                 self.move_cursor_right();
+                true
             }
             KeyCode::Home => {
                 self.cursor = 0;
+                true
             }
             KeyCode::End => {
                 self.cursor = self.input.chars().count();
+                true
             }
-            _ => {}
+            _ => false,
         }
     }
 

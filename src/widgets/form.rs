@@ -59,11 +59,20 @@ impl Form {
 
     /// Handles keyboard events
     pub fn handle_key_event(&mut self, key_event: KeyEvent) {
+        // If a field is focused we pass the event to it and return if it was used
+        if let Some(index) = self.focused_field {
+            if let Some(field) = self.fields.get_mut(index) {
+                if field.handle_key_event(&key_event) {
+                    return;
+                }
+            }
+        }
+
         match key_event.code {
-            KeyCode::Tab => {
+            KeyCode::Tab | KeyCode::Down => {
                 self.focus_next();
             }
-            KeyCode::BackTab => {
+            KeyCode::BackTab | KeyCode::Up => {
                 self.focus_previous();
             }
             _ => {}

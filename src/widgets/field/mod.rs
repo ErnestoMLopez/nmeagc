@@ -20,7 +20,9 @@ pub trait Field: WidgetRef + Send + Sync {
     fn highlight_style(&mut self, style: Style);
 
     /// Handles keyboard input.
-    fn handle_key_event(&mut self, event: &KeyEvent);
+    ///
+    /// Returns true if the field consumes the event.
+    fn handle_key_event(&mut self, event: &KeyEvent) -> bool;
 
     /// Focuses the field, allowing it to receive input and highlight it during rendering.
     fn focus(&mut self, focused: bool);

@@ -123,7 +123,7 @@ impl Field for ChoiceInput {
         self.highlighted_style = style;
     }
 
-    fn handle_key_event(&mut self, event: &KeyEvent) {
+    fn handle_key_event(&mut self, event: &KeyEvent) -> bool {
         match event.code {
             KeyCode::Enter | KeyCode::Char(' ') => {
                 if self.is_open {
@@ -131,22 +131,30 @@ impl Field for ChoiceInput {
                 } else {
                     self.toggle_open();
                 }
+                true
             }
             KeyCode::Esc if self.is_open => {
                 self.is_open = false;
+                true
             }
             KeyCode::Up if self.is_open => {
                 self.move_highlight_up();
+                true
             }
             KeyCode::Down if self.is_open => {
                 self.move_highlight_down();
+                true
             }
-            _ => {}
+            _ => false,
         }
     }
 
     fn focus(&mut self, focused: bool) {
         self.focused = focused;
+
+        if !focused {
+            self.is_open = false;
+        }
     }
 
     fn hidden(&mut self, hidden: bool) {

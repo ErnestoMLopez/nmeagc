@@ -16,7 +16,6 @@ pub struct CheckboxInput {
     marker: char,
     checked: bool,
     required: bool,
-    hidden: bool,
     focused: bool,
 }
 
@@ -29,7 +28,6 @@ impl CheckboxInput {
             marker: '✓',
             checked: false,
             required: false,
-            hidden: false,
             focused: false,
         }
     }
@@ -88,10 +86,6 @@ impl Field for CheckboxInput {
         self.focused = focused;
     }
 
-    fn hidden(&mut self, hidden: bool) {
-        self.hidden = hidden;
-    }
-
     fn validate(&self) -> Result<(), Vec<String>> {
         if self.required && !self.checked {
             Err(vec![format!("Field '{}' must be checked", self.label)])
@@ -136,13 +130,6 @@ impl WidgetRef for CheckboxInput {
         };
 
         checkbox.render(check_area, buf);
-
-        // If the field is hidden we don't render the label. This could be hidding more characters
-        // than really needed, but we don't know the width of the rest of the fields, so this is the
-        // best we can do.
-        if self.hidden {
-            return;
-        }
 
         let required_marker = if self.required { "*" } else { "" };
         let label_text = format!(" {}{}", self.label, required_marker);

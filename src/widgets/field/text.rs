@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style},
+    style::Style,
     text::{Line, Span},
     widgets::{Widget, WidgetRef},
 };
@@ -15,7 +15,6 @@ pub struct TextInput {
     style: Style,
     highlighted_style: Style,
     required: bool,
-    hidden: bool,
     focused: bool,
     obfuscated: bool,
     pub input: String, // TODO: Remove pub after refactoring the rest of the app
@@ -30,7 +29,6 @@ impl TextInput {
             style: Style::default(),
             highlighted_style: Style::default(),
             required: false,
-            hidden: false,
             focused: false,
             obfuscated: false,
             input: String::new(),
@@ -144,10 +142,6 @@ impl Field for TextInput {
         self.focused = focused;
     }
 
-    fn hidden(&mut self, hidden: bool) {
-        self.hidden = hidden;
-    }
-
     fn validate(&self) -> Result<(), Vec<String>> {
         if self.required && self.input.is_empty() {
             Err(vec![format!("{} is required", self.label)])
@@ -167,11 +161,7 @@ impl WidgetRef for TextInput {
             return;
         }
 
-        let label_style = if self.hidden {
-            self.style.add_modifier(Modifier::DIM)
-        } else {
-            self.style
-        };
+        let label_style = self.style;
 
         let required_marker = if self.required { "*" } else { "" };
         let label_text = format!("{}{}:", self.label, required_marker);
@@ -194,11 +184,6 @@ impl WidgetRef for TextInput {
 
         // We set the style for all the area so the focus is visible even if the input is empty
         buf.set_style(input_area, input_style);
-
-        // If the field is hidden or the input is empty, we don't render the input.
-        if self.hidden {
-            return;
-        }
 
         let input_text = if self.obfuscated {
             "*".repeat(self.input.len())

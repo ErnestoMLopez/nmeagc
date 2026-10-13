@@ -27,12 +27,6 @@ pub trait Field: WidgetRef + Send + Sync {
     /// Focuses the field, allowing it to receive input and highlight it during rendering.
     fn focus(&mut self, focused: bool);
 
-    /// Makes the field value hidden, so it can be skipped during rendering.
-    ///
-    /// This is useful for fields that are not visible due to previous fields with variable height,
-    /// such as a dropdown that is opened and hides the following fields.
-    fn hidden(&mut self, hidden: bool);
-
     /// Validates the field and returns any errors.
     fn validate(&self) -> Result<(), Vec<String>>;
 

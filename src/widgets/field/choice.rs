@@ -15,7 +15,6 @@ pub struct ChoiceInput {
     style: Style,
     highlighted_style: Style,
     required: bool,
-    hidden: bool,
     focused: bool,
     options: Vec<(String, String)>,
     selected: Option<usize>,
@@ -31,7 +30,6 @@ impl ChoiceInput {
             style: Style::default(),
             highlighted_style: Style::default(),
             required: false,
-            hidden: false,
             focused: false,
             options: Vec::new(),
             selected: None,
@@ -157,10 +155,6 @@ impl Field for ChoiceInput {
         }
     }
 
-    fn hidden(&mut self, hidden: bool) {
-        self.hidden = hidden;
-    }
-
     fn validate(&self) -> Result<(), Vec<String>> {
         if self.required && self.selected.is_none() {
             Err(vec![format!("{} is required", self.label)])
@@ -188,11 +182,7 @@ impl WidgetRef for ChoiceInput {
             return;
         }
 
-        let label_style = if self.hidden {
-            self.style.add_modifier(Modifier::DIM)
-        } else {
-            self.style
-        };
+        let label_style = self.style;
 
         let required_marker = if self.required { "*" } else { "" };
         let label_text = format!("{}{}:", self.label, required_marker);
@@ -206,11 +196,6 @@ impl WidgetRef for ChoiceInput {
         let [label_area, _, input_area] = area.layout(&layout);
 
         label_span.render(label_area, buf);
-
-        // If the field is hidden we don't render the input.
-        if self.hidden {
-            return;
-        }
 
         let input_style = if self.focused {
             self.style.add_modifier(Modifier::REVERSED)

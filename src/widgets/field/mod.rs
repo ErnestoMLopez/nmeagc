@@ -3,7 +3,7 @@ mod choice;
 mod text;
 
 use crossterm::event::KeyEvent;
-use ratatui::widgets::WidgetRef;
+use ratatui::{style::Style, widgets::WidgetRef};
 
 pub use checkbox::CheckboxInput;
 pub use choice::ChoiceInput;
@@ -12,6 +12,12 @@ pub use text::TextInput;
 pub trait Field: WidgetRef + Send + Sync {
     /// Returns the display label for this field.
     fn label(&self) -> &str;
+
+    /// Sets the style for the field in a non focused state
+    fn style(&mut self, style: Style);
+
+    /// Sets the style for a highlighted part of the field
+    fn highlight_style(&mut self, style: Style);
 
     /// Handles keyboard input.
     fn handle_key_event(&mut self, event: &KeyEvent);

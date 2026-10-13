@@ -25,22 +25,12 @@ impl Default for SourceSetup {
             step: SetupStep::Source,
             source_input: ChoiceInput::new("Source"),
             config_tcp: Form::new()
+                .field(TextInput::new("Host").required().with_input("127.0.0.1"))
+                .field(TextInput::new("Port").required().with_input("23000"))
                 .style(THEME.popups)
-                .field(
-                    TextInput::new("Host")
-                        .required()
-                        .with_input("127.0.0.1")
-                        .style(THEME.popups),
-                )
-                .field(
-                    TextInput::new("Port")
-                        .required()
-                        .with_input("23000")
-                        .style(THEME.popups),
-                ),
+                .highlight_style(THEME.popups_highlight),
             config_serial: Form::new()
-                .style(THEME.popups)
-                .field(TextInput::new("Path").required().style(THEME.popups))
+                .field(TextInput::new("Path").required())
                 .field(
                     ChoiceInput::new("Baud rate")
                         .options(vec![
@@ -56,8 +46,7 @@ impl Default for SourceSetup {
                             ("921600", "921600"),
                         ])
                         .with_selected("9600")
-                        .required()
-                        .style(THEME.popups),
+                        .required(),
                 )
                 .field(
                     ChoiceInput::new("Data bits")
@@ -67,20 +56,17 @@ impl Default for SourceSetup {
                             ("Seven", "7"),
                             ("Eight", "8"),
                         ])
-                        .required()
-                        .style(THEME.popups),
+                        .required(),
                 )
                 .field(
                     ChoiceInput::new("Parity")
                         .options(vec![("None", "None"), ("Odd", "Odd"), ("Even", "Even")])
-                        .required()
-                        .style(THEME.popups),
+                        .required(),
                 )
                 .field(
                     ChoiceInput::new("Stop bits")
                         .options(vec![("One", "1"), ("Two", "2")])
-                        .required()
-                        .style(THEME.popups),
+                        .required(),
                 )
                 .field(
                     ChoiceInput::new("Flow control")
@@ -89,14 +75,16 @@ impl Default for SourceSetup {
                             ("Sw", "Software"),
                             ("Hw", "Hardware"),
                         ])
-                        .required()
-                        .style(THEME.popups),
+                        .required(),
                 )
-                .field(TextInput::new("Timeout").style(THEME.popups))
-                .field(CheckboxInput::new("Exclusive").style(THEME.popups)),
-            config_file: Form::new()
+                .field(TextInput::new("Timeout"))
+                .field(CheckboxInput::new("Exclusive"))
                 .style(THEME.popups)
-                .field(TextInput::new("Path").required().style(THEME.popups)),
+                .highlight_style(THEME.popups_highlight),
+            config_file: Form::new()
+                .field(TextInput::new("Path").required())
+                .style(THEME.popups)
+                .highlight_style(THEME.popups_highlight),
             error: None,
         }
     }
@@ -189,14 +177,8 @@ pub struct ConfigFile {
 impl Default for ConfigTcp {
     fn default() -> Self {
         Self {
-            host: TextInput::new("Host")
-                .with_input("127.0.0.1")
-                .required()
-                .style(THEME.popups),
-            port: TextInput::new("Port")
-                .with_input("23000")
-                .required()
-                .style(THEME.popups),
+            host: TextInput::new("Host").with_input("127.0.0.1").required(),
+            port: TextInput::new("Port").with_input("23000").required(),
         }
     }
 }
@@ -204,13 +186,13 @@ impl Default for ConfigTcp {
 impl Default for ConfigSerial {
     fn default() -> Self {
         Self {
-            path: TextInput::new("Path").required().style(THEME.popups),
+            path: TextInput::new("Path").required(),
             baudrate: ChoiceInput::new("Baudrate"),
             data_bits: ChoiceInput::new("Data bits"),
             parity: ChoiceInput::new("Parity"),
             stop_bits: ChoiceInput::new("Stop bits"),
             flow_control: ChoiceInput::new("Flow control"),
-            timeout: TextInput::new("Timeout").style(THEME.popups),
+            timeout: TextInput::new("Timeout"),
             exclusive: CheckboxInput::new("Exclusive"),
         }
     }
@@ -219,7 +201,7 @@ impl Default for ConfigSerial {
 impl Default for ConfigFile {
     fn default() -> Self {
         Self {
-            path: TextInput::new("Path").required().style(THEME.popups),
+            path: TextInput::new("Path").required(),
         }
     }
 }

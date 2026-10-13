@@ -13,29 +13,51 @@ pub struct Form {
     fields: Vec<Box<dyn Field>>,
     focused_field: Option<usize>,
     style: Style,
+    highlight_style: Style,
     validation_errors: Vec<String>,
 }
 
 impl Form {
+    /// Creates a new [`Form`] with no fields and default style
     pub fn new() -> Self {
         Self {
             fields: Vec::new(),
             focused_field: None,
             style: Style::default(),
+            highlight_style: Style::default(),
             validation_errors: Vec::new(),
         }
     }
 
+    /// Adds a field to the [`Form`]
     pub fn field<T: Field + 'static>(mut self, field: T) -> Self {
         self.fields.push(Box::new(field));
         self
     }
 
+    /// Sets the base style for the [`Form`] and every [`Field`] added before to it
     pub fn style(mut self, style: Style) -> Self {
         self.style = style;
+
+        for field in &mut self.fields {
+            field.style(style);
+        }
+
         self
     }
 
+    /// Sets the style for any highlighted item of the [`Form`] and every [`Field`] added before to it
+    pub fn highlight_style(mut self, style: Style) -> Self {
+        self.highlight_style = style;
+
+        for field in &mut self.fields {
+            field.highlight_style(style);
+        }
+
+        self
+    }
+
+    /// Handles keyboard events
     pub fn handle_key_event(&mut self, key_event: KeyEvent) {
         match key_event.code {
             KeyCode::Tab => {

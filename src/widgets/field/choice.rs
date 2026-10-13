@@ -13,6 +13,7 @@ use ratatui::{
 pub struct ChoiceInput {
     label: String,
     style: Style,
+    highlighted_style: Style,
     required: bool,
     hidden: bool,
     focused: bool,
@@ -28,6 +29,7 @@ impl ChoiceInput {
         Self {
             label: label.into(),
             style: Style::default(),
+            highlighted_style: Style::default(),
             required: false,
             hidden: false,
             focused: false,
@@ -111,6 +113,14 @@ impl ChoiceInput {
 impl Field for ChoiceInput {
     fn label(&self) -> &str {
         &self.label
+    }
+
+    fn style(&mut self, style: Style) {
+        self.style = style;
+    }
+
+    fn highlight_style(&mut self, style: Style) {
+        self.highlighted_style = style;
     }
 
     fn handle_key_event(&mut self, event: &KeyEvent) {
@@ -225,7 +235,7 @@ impl WidgetRef for ChoiceInput {
         if self.is_open && dropdown_area.height > 0 {
             let dropdown = List::new(self.options.iter().map(|(_, option)| option.as_str()))
                 .style(input_style)
-                .highlight_style(input_style.not_reversed().bold());
+                .highlight_style(self.highlighted_style);
 
             let mut state = ListState::default().with_selected(Some(self.highlighted));
 

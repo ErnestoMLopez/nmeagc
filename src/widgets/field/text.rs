@@ -4,7 +4,7 @@ use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Widget, WidgetRef},
 };
@@ -13,6 +13,7 @@ use ratatui::{
 pub struct TextInput {
     label: String,
     style: Style,
+    highlighted_style: Style,
     required: bool,
     hidden: bool,
     focused: bool,
@@ -27,6 +28,7 @@ impl TextInput {
         Self {
             label: label.into(),
             style: Style::default(),
+            highlighted_style: Style::default(),
             required: false,
             hidden: false,
             focused: false,
@@ -39,12 +41,6 @@ impl TextInput {
     /// Sets an initial value for the text input.
     pub fn with_input(mut self, input: impl Into<String>) -> Self {
         self.input = input.into();
-        self
-    }
-
-    /// Sets the style (not highlighted) for the text input and label.
-    pub fn style(mut self, style: Style) -> Self {
-        self.style = style;
         self
     }
 
@@ -99,6 +95,14 @@ impl TextInput {
 impl Field for TextInput {
     fn label(&self) -> &str {
         &self.label
+    }
+
+    fn style(&mut self, style: Style) {
+        self.style = style;
+    }
+
+    fn highlight_style(&mut self, style: Style) {
+        self.highlighted_style = style;
     }
 
     fn handle_key_event(&mut self, event: &KeyEvent) {
@@ -201,11 +205,11 @@ impl WidgetRef for TextInput {
             (false, _) => Line::from(Span::styled(&input_text, input_style)),
             (true, None) => Line::from(vec![
                 Span::styled(&input_text, input_style),
-                Span::styled(" ", input_style.bg(Color::Blue).fg(Color::White)),
+                Span::styled(" ", self.highlighted_style),
             ]),
             (true, Some((cursor_index, c))) => Line::from(vec![
                 Span::styled(&input_text[..cursor_index], input_style),
-                Span::styled(c.to_string(), input_style.bg(Color::Blue).fg(Color::White)),
+                Span::styled(c.to_string(), self.highlighted_style),
                 Span::styled(&input_text[(cursor_index + c.len_utf8())..], input_style),
             ]),
         };

@@ -58,7 +58,7 @@ impl App {
         let app = Self {
             running: true,
             interactive_setup: args.interactive,
-            source_setup: SourceSetup::default(),
+            source_setup: SourceSetup::new(),
             mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),

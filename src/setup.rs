@@ -19,8 +19,9 @@ pub struct SourceSetup {
     pub error: Option<&'static str>,
 }
 
-impl Default for SourceSetup {
-    fn default() -> Self {
+impl SourceSetup {
+    /// Creates a new [`SourceSetup`] instance to implement the client interactive setup
+    pub fn new() -> Self {
         Self {
             step: SetupStep::Source,
             source_input: ChoiceInput::new("Source"),
@@ -88,9 +89,7 @@ impl Default for SourceSetup {
             error: None,
         }
     }
-}
 
-impl SourceSetup {
     pub fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<SetupAction, Error> {
         if key_event.kind != KeyEventKind::Press {
             return Ok(SetupAction::Continue);

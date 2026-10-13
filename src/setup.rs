@@ -174,38 +174,6 @@ pub struct ConfigFile {
     pub path: TextInput,
 }
 
-impl Default for ConfigTcp {
-    fn default() -> Self {
-        Self {
-            host: TextInput::new("Host").with_input("127.0.0.1").required(),
-            port: TextInput::new("Port").with_input("23000").required(),
-        }
-    }
-}
-
-impl Default for ConfigSerial {
-    fn default() -> Self {
-        Self {
-            path: TextInput::new("Path").required(),
-            baudrate: ChoiceInput::new("Baudrate"),
-            data_bits: ChoiceInput::new("Data bits"),
-            parity: ChoiceInput::new("Parity"),
-            stop_bits: ChoiceInput::new("Stop bits"),
-            flow_control: ChoiceInput::new("Flow control"),
-            timeout: TextInput::new("Timeout"),
-            exclusive: CheckboxInput::new("Exclusive"),
-        }
-    }
-}
-
-impl Default for ConfigFile {
-    fn default() -> Self {
-        Self {
-            path: TextInput::new("Path").required(),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum TcpOption {
     Host,

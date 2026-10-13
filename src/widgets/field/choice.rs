@@ -182,7 +182,7 @@ impl WidgetRef for ChoiceInput {
             return;
         }
 
-        let label_style = self.style;
+        let label_style = self.style.bold();
 
         let required_marker = if self.required { "*" } else { "" };
         let label_text = format!("{}{}:", self.label, required_marker);

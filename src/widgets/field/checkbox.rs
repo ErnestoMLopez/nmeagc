@@ -133,7 +133,7 @@ impl WidgetRef for CheckboxInput {
 
         let required_marker = if self.required { "*" } else { "" };
         let label_text = format!(" {}{}", self.label, required_marker);
-        let label = Span::styled(&label_text, self.style);
+        let label = Span::styled(&label_text, self.style.bold());
 
         label.render(label_area, buf);
     }

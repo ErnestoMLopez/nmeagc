@@ -77,8 +77,8 @@ impl Default for SourceSetup {
                         ])
                         .required(),
                 )
-                .field(TextInput::new("Timeout"))
-                .field(CheckboxInput::new("Exclusive"))
+                .field(TextInput::new("Timeout [ms]"))
+                .field(CheckboxInput::new("Exclusive access"))
                 .style(THEME.popups)
                 .highlight_style(THEME.popups_highlight),
             config_file: Form::new()

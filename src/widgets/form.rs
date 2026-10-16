@@ -136,30 +136,77 @@ impl Form {
             }
         }
     }
+
+    fn render_cancel_button(&self, area: Rect, buf: &mut Buffer) {
+        let (button_label, button_style) = if self.focus == FormFocus::CancelButton {
+            ("[ Cancel ]", self.style.reversed())
+        } else {
+            ("  Cancel  ", self.style)
+        };
+
+        // Center the button
+        let button_width = button_label.len() as u16;
+        let x = area.x + (area.width.saturating_sub(button_width)) / 2;
+
+        for (i, c) in button_label.chars().enumerate() {
+            if x + (i as u16) < area.x + area.width {
+                buf[(x + i as u16, area.y)].set_char(c);
+                buf[(x + i as u16, area.y)].set_style(button_style);
+            }
+        }
+    }
+
+    fn render_submit_button(&self, area: Rect, buf: &mut Buffer) {
+        let (button_label, button_style) = if self.focus == FormFocus::SubmitButton {
+            ("[ Submit ]", self.style.reversed())
+        } else {
+            ("  Submit  ", self.style)
+        };
+
+        // Center the button
+        let button_width = button_label.len() as u16;
+        let x = area.x + (area.width.saturating_sub(button_width)) / 2;
+
+        for (i, c) in button_label.chars().enumerate() {
+            if x + (i as u16) < area.x + area.width {
+                buf[(x + i as u16, area.y)].set_char(c);
+                buf[(x + i as u16, area.y)].set_style(button_style);
+            }
+        }
+    }
 }
 
 impl Widget for &Form {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // Layout for fields and submit button. Selectable fields can have variable height, and they
-        // hide following fields values when opened.
-        let mut fields_area = area;
+        // Layout for fields, validation error message and cancel and submit buttons
+        let mut constraints = Vec::with_capacity(self.fields.len() + 5);
 
         for field in &self.fields {
-            let field_height = field.height();
-            let layout = Layout::vertical([Constraint::Length(field_height), Constraint::Min(0)]);
-            let [top, bottom] = fields_area.layout(&layout);
-            field.render_ref(top, buf);
-            fields_area = bottom;
+            constraints.push(Constraint::Length(field.height()));
+        }
+        constraints.push(Constraint::Fill(1));
+        constraints.extend([Constraint::Length(1); 3]);
+        constraints.push(Constraint::Fill(0));
+
+        let areas = Layout::vertical(constraints).split(area);
+
+        for (i, field) in self.fields.iter().enumerate() {
+            field.render_ref(areas[i], buf);
         }
 
         // Render submit button
-        // let layout = Layout::vertical([
-        //     Constraint::Length(1),
-        //     Constraint::Length(1),
-        //     Constraint::Min(0),
-        // ]);
-        // let [_, button, _] = fields_area.layout(&layout);
-        // self.render_submit_button(button, buf);
+        if let Some(row_area) = areas.get(self.fields.len() + 3) {
+            let layout = Layout::horizontal([
+                Constraint::Fill(1),
+                Constraint::Percentage(30),
+                Constraint::Fill(1),
+                Constraint::Percentage(30),
+                Constraint::Fill(1),
+            ]);
+            let [_, cancel_button_area, _, submit_button_area, _] = row_area.layout(&layout);
+            self.render_cancel_button(cancel_button_area, buf);
+            self.render_submit_button(submit_button_area, buf);
+        }
 
         // Render validation errors summary if any
         if !self.validation_errors.is_empty() {
@@ -183,6 +230,7 @@ impl Widget for &Form {
     }
 }
 
+#[derive(PartialEq)]
 enum FormFocus {
     Field(usize),
     SubmitButton,

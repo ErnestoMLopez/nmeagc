@@ -27,7 +27,7 @@ impl App {
         frame.render_widget(screen, frame.area());
 
         if self.interactive_setup {
-            let interactive_setup_area = centered_rect(40, 40, frame.area());
+            let interactive_setup_area = centered_rect(40, 50, frame.area());
             render_interactive_setup(self, frame, interactive_setup_area);
             return;
         }

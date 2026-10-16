@@ -11,7 +11,7 @@ use ratatui::{
 
 pub struct Form {
     fields: Vec<Box<dyn Field>>,
-    focused_field: Option<usize>,
+    focus: FormFocus,
     style: Style,
     highlight_style: Style,
     validation_errors: Vec<String>,
@@ -22,7 +22,7 @@ impl Form {
     pub fn new() -> Self {
         Self {
             fields: Vec::new(),
-            focused_field: None,
+            focus: FormFocus::None,
             style: Style::default(),
             highlight_style: Style::default(),
             validation_errors: Vec::new(),
@@ -60,7 +60,7 @@ impl Form {
     /// Handles keyboard events
     pub fn handle_key_event(&mut self, key_event: KeyEvent) {
         // If a field is focused we pass the event to it and return if it was used
-        if let Some(index) = self.focused_field {
+        if let FormFocus::Field(index) = self.focus {
             if let Some(field) = self.fields.get_mut(index) {
                 if field.handle_key_event(&key_event) {
                     return;
@@ -78,59 +78,63 @@ impl Form {
             _ => {}
         }
 
-        if let Some(index) = self.focused_field {
+        if let FormFocus::Field(index) = self.focus {
             if let Some(field) = self.fields.get_mut(index) {
                 field.handle_key_event(&key_event);
             }
         }
     }
 
-    /// Moves focus to the next field or make the form out of focus.
+    /// Moves focus to the next field or button.
     fn focus_next(&mut self) {
-        self.focused_field = if let Some(index) = self.focused_field {
-            if let Some(field) = self.fields.get_mut(index) {
-                field.focus(false);
-            }
-
-            if index < self.fields.len() - 1 {
-                let index = index + 1;
+        self.focus = match self.focus {
+            FormFocus::Field(index) => {
                 if let Some(field) = self.fields.get_mut(index) {
-                    field.focus(true);
+                    field.focus(false);
                 }
-                Some(index)
-            } else {
-                None
+
+                if index < self.fields.len() - 1 {
+                    FormFocus::Field(index + 1)
+                } else {
+                    FormFocus::CancelButton
+                }
             }
-        } else {
-            if let Some(field) = self.fields.get_mut(0) {
+            FormFocus::CancelButton => FormFocus::SubmitButton,
+            FormFocus::SubmitButton => FormFocus::Field(0),
+            FormFocus::None => FormFocus::Field(0),
+        };
+
+        if let FormFocus::Field(index) = self.focus {
+            if let Some(field) = self.fields.get_mut(index) {
                 field.focus(true);
             }
-            Some(0)
-        };
+        }
     }
 
-    /// Moves focus to the previous field or make the form out of focus.
+    /// Moves focus to the previous field or button.
     fn focus_previous(&mut self) {
-        self.focused_field = if let Some(index) = self.focused_field {
-            if let Some(field) = self.fields.get_mut(index) {
-                field.focus(false);
-            }
-            if index > 0 {
-                let index = index - 1;
+        self.focus = match self.focus {
+            FormFocus::Field(index) => {
                 if let Some(field) = self.fields.get_mut(index) {
-                    field.focus(true);
+                    field.focus(false);
                 }
-                Some(index)
-            } else {
-                None
+
+                if index > 0 {
+                    FormFocus::Field(index - 1)
+                } else {
+                    FormFocus::SubmitButton
+                }
             }
-        } else {
-            let index = self.fields.len().saturating_sub(1);
+            FormFocus::CancelButton => FormFocus::Field(self.fields.len().saturating_sub(1)),
+            FormFocus::SubmitButton => FormFocus::CancelButton,
+            FormFocus::None => FormFocus::SubmitButton,
+        };
+
+        if let FormFocus::Field(index) = self.focus {
             if let Some(field) = self.fields.get_mut(index) {
                 field.focus(true);
             }
-            Some(index)
-        };
+        }
     }
 }
 
@@ -177,4 +181,11 @@ impl Widget for &Form {
             error_line.render(error_area, buf);
         }
     }
+}
+
+enum FormFocus {
+    Field(usize),
+    SubmitButton,
+    CancelButton,
+    None,
 }

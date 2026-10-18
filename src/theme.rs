@@ -7,6 +7,7 @@ pub struct Theme {
     pub tabs: Style,
     pub tabs_selected: Style,
     pub popups: Style,
+    pub popups_button: Style,
     pub popups_highlight: Style,
     pub borders: Style,
     pub description: Style,
@@ -34,6 +35,7 @@ pub const THEME: Theme = Theme {
         .add_modifier(Modifier::BOLD)
         .add_modifier(Modifier::REVERSED),
     popups: Style::new().fg(MID_BLUE).bg(GRAY),
+    popups_button: Style::new().fg(DARK_BLUE).bg(MID_GRAY),
     popups_highlight: Style::new().fg(Color::White).bg(Color::Blue).bold(),
     borders: Style::new().fg(LIGHT_GRAY),
     description: Style::new().fg(LIGHT_GRAY).bg(DARK_BLUE),

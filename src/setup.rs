@@ -29,6 +29,7 @@ impl SourceSetup {
                 .field(TextInput::new("Host").required().with_input("127.0.0.1"))
                 .field(TextInput::new("Port").required().with_input("23000"))
                 .style(THEME.popups)
+                .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
             config_serial: Form::new()
                 .field(TextInput::new("Path").required())
@@ -81,10 +82,12 @@ impl SourceSetup {
                 .field(TextInput::new("Timeout [ms]"))
                 .field(CheckboxInput::new("Exclusive access"))
                 .style(THEME.popups)
+                .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
             config_file: Form::new()
                 .field(TextInput::new("Path").required())
                 .style(THEME.popups)
+                .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
             error: None,
         }

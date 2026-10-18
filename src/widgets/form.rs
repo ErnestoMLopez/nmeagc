@@ -13,6 +13,7 @@ pub struct Form {
     fields: Vec<Box<dyn Field>>,
     focus: FormFocus,
     style: Style,
+    buttons_style: Style,
     highlight_style: Style,
     validation_errors: Vec<String>,
 }
@@ -24,6 +25,7 @@ impl Form {
             fields: Vec::new(),
             focus: FormFocus::None,
             style: Style::default(),
+            buttons_style: Style::default(),
             highlight_style: Style::default(),
             validation_errors: Vec::new(),
         }
@@ -43,6 +45,12 @@ impl Form {
             field.style(style);
         }
 
+        self
+    }
+
+    /// Sets the base style for the [`Form`] buttons
+    pub fn buttons_style(mut self, style: Style) -> Self {
+        self.buttons_style = style;
         self
     }
 
@@ -139,9 +147,9 @@ impl Form {
 
     fn render_cancel_button(&self, area: Rect, buf: &mut Buffer) {
         let (button_label, button_style) = if self.focus == FormFocus::CancelButton {
-            ("[ Cancel ]", self.style.reversed())
+            ("[ Cancel ]", self.buttons_style.reversed())
         } else {
-            ("  Cancel  ", self.style)
+            ("  Cancel  ", self.buttons_style)
         };
 
         // Center the button
@@ -158,9 +166,9 @@ impl Form {
 
     fn render_submit_button(&self, area: Rect, buf: &mut Buffer) {
         let (button_label, button_style) = if self.focus == FormFocus::SubmitButton {
-            ("[ Submit ]", self.style.reversed())
+            ("[ Submit ]", self.buttons_style.reversed())
         } else {
-            ("  Submit  ", self.style)
+            ("  Submit  ", self.buttons_style)
         };
 
         // Center the button

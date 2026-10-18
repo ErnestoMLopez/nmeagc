@@ -168,25 +168,19 @@ impl Form {
             "Cancel"
         };
 
-        let (button_label, button_style) = if self.focus == FormFocus::CancelButton {
-            (
-                format!(
-                    "[ {:^width$} ]",
-                    buttom_text,
-                    width = (area.width as usize).saturating_sub(4)
-                ),
-                self.buttons_style.reversed(),
-            )
+        let (delimiters, button_style) = if self.focus == FormFocus::CancelButton {
+            (["[ ", " ]"], self.buttons_style.reversed())
         } else {
-            (
-                format!(
-                    "  {:^width$}  ",
-                    buttom_text,
-                    width = (area.width as usize).saturating_sub(4)
-                ),
-                self.buttons_style,
-            )
+            (["  ", "  "], self.buttons_style)
         };
+
+        let button_label = format!(
+            "{}{:^width$}{}",
+            delimiters[0],
+            buttom_text,
+            delimiters[1],
+            width = (area.width as usize).saturating_sub(4)
+        );
 
         // Center the button
         let button_width = button_label.len() as u16;
@@ -207,25 +201,19 @@ impl Form {
             "Submit"
         };
 
-        let (button_label, button_style) = if self.focus == FormFocus::SubmitButton {
-            (
-                format!(
-                    "[ {:^width$} ]",
-                    buttom_text,
-                    width = (area.width as usize).saturating_sub(4)
-                ),
-                self.buttons_style.reversed(),
-            )
+        let (delimiters, button_style) = if self.focus == FormFocus::SubmitButton {
+            (["[ ", " ]"], self.buttons_style.reversed())
         } else {
-            (
-                format!(
-                    "  {:^width$}  ",
-                    buttom_text,
-                    width = (area.width as usize).saturating_sub(4)
-                ),
-                self.buttons_style,
-            )
+            (["  ", "  "], self.buttons_style)
         };
+
+        let button_label = format!(
+            "{}{:^width$}{}",
+            delimiters[0],
+            buttom_text,
+            delimiters[1],
+            width = (area.width as usize).saturating_sub(4)
+        );
 
         // Center the button
         let button_width = button_label.len() as u16;

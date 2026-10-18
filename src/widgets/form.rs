@@ -182,16 +182,9 @@ impl Form {
             width = (area.width as usize).saturating_sub(4)
         );
 
-        // Center the button
-        let button_width = button_label.len() as u16;
-        let x = area.x + (area.width.saturating_sub(button_width)) / 2;
+        let button = Span::styled(button_label, button_style);
 
-        for (i, c) in button_label.chars().enumerate() {
-            if x + (i as u16) < area.x + area.width {
-                buf[(x + i as u16, area.y)].set_char(c);
-                buf[(x + i as u16, area.y)].set_style(button_style);
-            }
-        }
+        button.render(area, buf);
     }
 
     fn render_submit_button(&self, area: Rect, buf: &mut Buffer) {
@@ -215,16 +208,9 @@ impl Form {
             width = (area.width as usize).saturating_sub(4)
         );
 
-        // Center the button
-        let button_width = button_label.len() as u16;
-        let x = area.x + (area.width.saturating_sub(button_width)) / 2;
+        let button = Span::styled(button_label, button_style);
 
-        for (i, c) in button_label.chars().enumerate() {
-            if x + (i as u16) < area.x + area.width {
-                buf[(x + i as u16, area.y)].set_char(c);
-                buf[(x + i as u16, area.y)].set_style(button_style);
-            }
-        }
+        button.render(area, buf);
     }
 }
 

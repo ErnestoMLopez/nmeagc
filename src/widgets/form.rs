@@ -169,9 +169,23 @@ impl Form {
         };
 
         let (button_label, button_style) = if self.focus == FormFocus::CancelButton {
-            (format!("[ {buttom_text} ]"), self.buttons_style.reversed())
+            (
+                format!(
+                    "[ {:^width$} ]",
+                    buttom_text,
+                    width = (area.width as usize).saturating_sub(4)
+                ),
+                self.buttons_style.reversed(),
+            )
         } else {
-            (format!("  {buttom_text}  "), self.buttons_style)
+            (
+                format!(
+                    "  {:^width$}  ",
+                    buttom_text,
+                    width = (area.width as usize).saturating_sub(4)
+                ),
+                self.buttons_style,
+            )
         };
 
         // Center the button
@@ -194,9 +208,23 @@ impl Form {
         };
 
         let (button_label, button_style) = if self.focus == FormFocus::SubmitButton {
-            (format!("[ {buttom_text} ]"), self.buttons_style.reversed())
+            (
+                format!(
+                    "[ {:^width$} ]",
+                    buttom_text,
+                    width = (area.width as usize).saturating_sub(4)
+                ),
+                self.buttons_style.reversed(),
+            )
         } else {
-            (format!("  {buttom_text}  "), self.buttons_style)
+            (
+                format!(
+                    "  {:^width$}  ",
+                    buttom_text,
+                    width = (area.width as usize).saturating_sub(4)
+                ),
+                self.buttons_style,
+            )
         };
 
         // Center the button

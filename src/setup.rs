@@ -28,6 +28,8 @@ impl SourceSetup {
             config_tcp: Form::new()
                 .field(TextInput::new("Host").required().with_input("127.0.0.1"))
                 .field(TextInput::new("Port").required().with_input("23000"))
+                .cancel_button("Back")
+                .submit_button("Finish")
                 .style(THEME.popups)
                 .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
@@ -81,11 +83,15 @@ impl SourceSetup {
                 )
                 .field(TextInput::new("Timeout [ms]"))
                 .field(CheckboxInput::new("Exclusive access"))
+                .cancel_button("Back")
+                .submit_button("Finish")
                 .style(THEME.popups)
                 .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
             config_file: Form::new()
                 .field(TextInput::new("Path").required())
+                .cancel_button("Back")
+                .submit_button("Finish")
                 .style(THEME.popups)
                 .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),

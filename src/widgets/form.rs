@@ -12,6 +12,8 @@ use ratatui::{
 pub struct Form {
     fields: Vec<Box<dyn Field>>,
     focus: FormFocus,
+    cancel_button: Option<String>,
+    submit_button: Option<String>,
     style: Style,
     buttons_style: Style,
     highlight_style: Style,
@@ -24,6 +26,8 @@ impl Form {
         Self {
             fields: Vec::new(),
             focus: FormFocus::None,
+            cancel_button: None,
+            submit_button: None,
             style: Style::default(),
             buttons_style: Style::default(),
             highlight_style: Style::default(),
@@ -62,6 +66,18 @@ impl Form {
             field.highlight_style(style);
         }
 
+        self
+    }
+
+    /// Sets a custom label for the cancel button
+    pub fn cancel_button(mut self, label: impl Into<String>) -> Self {
+        self.cancel_button = Some(label.into());
+        self
+    }
+
+    /// Sets a custom label for the submit button
+    pub fn submit_button(mut self, label: impl Into<String>) -> Self {
+        self.submit_button = Some(label.into());
         self
     }
 
@@ -146,10 +162,16 @@ impl Form {
     }
 
     fn render_cancel_button(&self, area: Rect, buf: &mut Buffer) {
-        let (button_label, button_style) = if self.focus == FormFocus::CancelButton {
-            ("[ Cancel ]", self.buttons_style.reversed())
+        let buttom_text = if let Some(ref label) = self.cancel_button {
+            label
         } else {
-            ("  Cancel  ", self.buttons_style)
+            "Cancel"
+        };
+
+        let (button_label, button_style) = if self.focus == FormFocus::CancelButton {
+            (format!("[ {buttom_text} ]"), self.buttons_style.reversed())
+        } else {
+            (format!("  {buttom_text}  "), self.buttons_style)
         };
 
         // Center the button
@@ -165,10 +187,16 @@ impl Form {
     }
 
     fn render_submit_button(&self, area: Rect, buf: &mut Buffer) {
-        let (button_label, button_style) = if self.focus == FormFocus::SubmitButton {
-            ("[ Submit ]", self.buttons_style.reversed())
+        let buttom_text = if let Some(ref label) = self.submit_button {
+            label
         } else {
-            ("  Submit  ", self.buttons_style)
+            "Submit"
+        };
+
+        let (button_label, button_style) = if self.focus == FormFocus::SubmitButton {
+            (format!("[ {buttom_text} ]"), self.buttons_style.reversed())
+        } else {
+            (format!("  {buttom_text}  "), self.buttons_style)
         };
 
         // Center the button

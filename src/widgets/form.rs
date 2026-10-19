@@ -1,11 +1,11 @@
-use crate::widgets::field::Field;
+use crate::widgets::field::{Field, ValidationError};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
     buffer::Buffer,
     layout::{Constraint, Layout, Rect},
     style::Style,
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::Widget,
 };
 
@@ -17,7 +17,7 @@ pub struct Form {
     style: Style,
     buttons_style: Style,
     highlight_style: Style,
-    validation_errors: Vec<String>,
+    validation_errors: Vec<ValidationError>,
 }
 
 impl Form {
@@ -93,6 +93,10 @@ impl Form {
         }
 
         match key_event.code {
+            KeyCode::Enter if self.focus == FormFocus::SubmitButton => {
+                self.try_submit();
+                return;
+            }
             KeyCode::Tab | KeyCode::Down => {
                 self.focus_next();
             }
@@ -105,6 +109,35 @@ impl Form {
         if let FormFocus::Field(index) = self.focus {
             if let Some(field) = self.fields.get_mut(index) {
                 field.handle_key_event(&key_event);
+            }
+        }
+    }
+
+    fn try_submit(&mut self) {
+        self.validation_errors.clear();
+
+        // Run validators for every field storing the errors
+        for field in &self.fields {
+            if let Err(errors) = field.validate() {
+                self.validation_errors
+                    .extend(errors.iter().map(|msg| ValidationError {
+                        field: field.label().to_string(),
+                        message: msg.clone(),
+                    }));
+            }
+        }
+
+        if self.validation_errors.is_empty() {
+            // TODO: Implementar forma de devolver el resultado del formulario
+            // self.result = FormResult::Submitted;
+        } else {
+            if let Some(error) = self.validation_errors.first() {
+                for (i, field) in self.fields.iter().enumerate() {
+                    if field.label() == error.field {
+                        self.focus_field(i);
+                        break;
+                    }
+                }
             }
         }
     }
@@ -158,6 +191,20 @@ impl Form {
             if let Some(field) = self.fields.get_mut(index) {
                 field.focus(true);
             }
+        }
+    }
+
+    /// Moves focus to a given field.
+    fn focus_field(&mut self, index: usize) {
+        if let FormFocus::Field(index_prev) = self.focus {
+            if let Some(field) = self.fields.get_mut(index_prev) {
+                field.focus(false);
+            }
+        }
+
+        if let Some(field) = self.fields.get_mut(index) {
+            self.focus = FormFocus::Field(index);
+            field.focus(true);
         }
     }
 
@@ -223,7 +270,8 @@ impl Widget for &Form {
             constraints.push(Constraint::Length(field.height()));
         }
         constraints.push(Constraint::Fill(1));
-        constraints.extend([Constraint::Length(1); 3]);
+        constraints.push(Constraint::Length(2));
+        constraints.extend([Constraint::Length(1); 2]);
         constraints.push(Constraint::Fill(0));
 
         let areas = Layout::vertical(constraints).split(area);
@@ -254,16 +302,18 @@ impl Widget for &Form {
                 error_count,
                 if error_count == 1 { "" } else { "s" }
             );
+            let error_field = self.validation_errors[0].field.clone();
+            let field_error_msg = format!(": {}", self.validation_errors[0].message);
 
-            let error_area = Rect {
-                x: area.x,
-                y: area.y + area.height.saturating_sub(1),
-                width: area.width,
-                height: 1,
-            };
-
-            let error_line = Line::from(Span::styled(error_msg, self.style.red()));
-            error_line.render(error_area, buf);
+            if let Some(error_area) = areas.get(areas.len() - 4) {
+                let error_line = Line::from(Span::styled(error_msg, self.style.red()));
+                let field_error_line = Line::from(vec![
+                    Span::styled(error_field, self.style.red().bold()),
+                    Span::styled(field_error_msg, self.style.red()),
+                ]);
+                let error_text = Text::from(vec![error_line, field_error_line]);
+                error_text.render(*error_area, buf);
+            }
         }
     }
 }

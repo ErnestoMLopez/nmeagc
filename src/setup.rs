@@ -2,10 +2,12 @@ use crate::{
     cli::{DataSource, TcpConfig},
     theme::THEME,
     widgets::{
-        field::{CheckboxInput, ChoiceInput, TextInput},
+        field::{CheckboxInput, ChoiceInput, TextInput, Validator},
         form::Form,
     },
 };
+
+use std::path::Path;
 
 use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
@@ -34,7 +36,11 @@ impl SourceSetup {
                 .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
             config_serial: Form::new()
-                .field(TextInput::new("Path").required())
+                .field(
+                    TextInput::new("Path")
+                        .required()
+                        .validator(Box::new(PathString)),
+                )
                 .field(
                     ChoiceInput::new("Baud rate")
                         .options(vec![
@@ -89,7 +95,11 @@ impl SourceSetup {
                 .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
             config_file: Form::new()
-                .field(TextInput::new("Path").required())
+                .field(
+                    TextInput::new("Path")
+                        .required()
+                        .validator(Box::new(PathString)),
+                )
                 .cancel_button("Back")
                 .submit_button("Finish")
                 .style(THEME.popups)
@@ -159,13 +169,11 @@ impl SourceSetup {
     }
 }
 
-#[derive(Debug)]
 pub struct ConfigTcp {
     pub host: TextInput,
     pub port: TextInput,
 }
 
-#[derive(Debug)]
 pub struct ConfigSerial {
     pub path: TextInput,
     pub baudrate: ChoiceInput,
@@ -177,7 +185,6 @@ pub struct ConfigSerial {
     pub exclusive: CheckboxInput,
 }
 
-#[derive(Debug)]
 pub struct ConfigFile {
     pub path: TextInput,
 }
@@ -233,6 +240,17 @@ pub enum SetupAction {
     Continue,
     Cancel,
     Complete(DataSource),
+}
+
+struct PathString;
+
+impl Validator for PathString {
+    fn validate(&self, value: &str) -> Result<(), String> {
+        let path = Path::new(value);
+        path.exists()
+            .then_some(())
+            .ok_or("Path does not exists".to_string())
+    }
 }
 
 #[derive(Clone, Copy, Debug)]

@@ -1,4 +1,4 @@
-use crate::widgets::field::Field;
+use crate::widgets::field::{Field, validation::Validator};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -9,7 +9,6 @@ use ratatui::{
     widgets::{Widget, WidgetRef},
 };
 
-#[derive(Debug)]
 pub struct TextInput {
     label: String,
     style: Style,
@@ -17,6 +16,7 @@ pub struct TextInput {
     required: bool,
     focused: bool,
     obfuscated: bool,
+    validators: Vec<Box<dyn Validator>>,
     input: String,
     cursor: usize,
 }
@@ -31,12 +31,13 @@ impl TextInput {
             required: false,
             focused: false,
             obfuscated: false,
+            validators: Vec::new(),
             input: String::new(),
             cursor: 0,
         }
     }
 
-    /// Sets an initial value for the text input.
+    /// Sets an initial value for the [`TextInput`].
     pub fn with_input(mut self, input: impl Into<String>) -> Self {
         self.input = input.into();
         self
@@ -51,6 +52,12 @@ impl TextInput {
     /// Makes the field value obfuscated, so it can be used for password input.
     pub fn obfuscated(mut self) -> Self {
         self.obfuscated = true;
+        self
+    }
+
+    /// Adds a [`Validator`] to the field
+    pub fn validator(mut self, validator: Box<dyn Validator>) -> Self {
+        self.validators.push(validator);
         self
     }
 
@@ -143,11 +150,19 @@ impl Field for TextInput {
     }
 
     fn validate(&self) -> Result<(), Vec<String>> {
+        let mut errors = Vec::new();
+
         if self.required && self.input.is_empty() {
-            Err(vec![format!("{} is required", self.label)])
-        } else {
-            Ok(())
+            errors.push(format!("Field is required"));
         }
+
+        for validator in &self.validators {
+            if let Err(msg) = validator.validate(&self.input) {
+                errors.push(msg);
+            }
+        }
+
+        errors.is_empty().then_some(()).ok_or(errors)
     }
 
     fn is_required(&self) -> bool {

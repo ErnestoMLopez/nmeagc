@@ -157,7 +157,7 @@ impl Field for ChoiceInput {
 
     fn validate(&self) -> Result<(), Vec<String>> {
         if self.required && self.selected.is_none() {
-            Err(vec![format!("{} is required", self.label)])
+            Err(vec![format!("Field is required")])
         } else {
             Ok(())
         }

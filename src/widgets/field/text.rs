@@ -17,7 +17,7 @@ pub struct TextInput {
     required: bool,
     focused: bool,
     obfuscated: bool,
-    pub input: String, // TODO: Remove pub after refactoring the rest of the app
+    input: String,
     cursor: usize,
 }
 

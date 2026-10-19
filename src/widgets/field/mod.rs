@@ -1,6 +1,7 @@
 mod checkbox;
 mod choice;
 mod text;
+mod validation;
 
 use crossterm::event::KeyEvent;
 use ratatui::{style::Style, widgets::WidgetRef};
@@ -8,6 +9,7 @@ use ratatui::{style::Style, widgets::WidgetRef};
 pub use checkbox::CheckboxInput;
 pub use choice::ChoiceInput;
 pub use text::TextInput;
+pub use validation::{ValidationError, Validator};
 
 pub trait Field: WidgetRef + Send + Sync {
     /// Returns the display label for this field.

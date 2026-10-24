@@ -1,4 +1,4 @@
-use crate::widgets::field::Field;
+use crate::widgets::field::{Field, FieldValue};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -64,6 +64,10 @@ impl CheckboxInput {
 impl Field for CheckboxInput {
     fn label(&self) -> &str {
         &self.label
+    }
+
+    fn value(&self) -> FieldValue {
+        FieldValue::Bool(self.checked)
     }
 
     fn style(&mut self, style: Style) {

@@ -1,4 +1,4 @@
-use crate::widgets::field::{Field, validation::Validator};
+use crate::widgets::field::{Field, FieldValue, validation::Validator};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -100,6 +100,10 @@ impl TextInput {
 impl Field for TextInput {
     fn label(&self) -> &str {
         &self.label
+    }
+
+    fn value(&self) -> FieldValue {
+        FieldValue::Text(self.input.clone())
     }
 
     fn style(&mut self, style: Style) {

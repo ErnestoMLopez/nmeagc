@@ -1,4 +1,4 @@
-use crate::widgets::field::Field;
+use crate::widgets::field::{Field, FieldValue};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -111,6 +111,21 @@ impl ChoiceInput {
 impl Field for ChoiceInput {
     fn label(&self) -> &str {
         &self.label
+    }
+
+    fn value(&self) -> FieldValue {
+        let field_value = self
+            .selected
+            .and_then(|i| self.options.get(i))
+            .map(|(_, display)| display);
+
+        field_value
+            .map(|s| s.parse::<i64>())
+            .and_then(|d| d.ok())
+            .map(|n| FieldValue::Int(n))
+            .unwrap_or(FieldValue::Text(
+                field_value.cloned().unwrap_or("".to_string()),
+            ))
     }
 
     fn style(&mut self, style: Style) {

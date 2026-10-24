@@ -1,4 +1,4 @@
-use crate::widgets::field::{Field, ValidationError};
+use crate::widgets::field::{Field, FieldValue, ValidationError};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -12,6 +12,7 @@ use ratatui::{
 pub struct Form {
     fields: Vec<Box<dyn Field>>,
     focus: FormFocus,
+    state: FormState,
     cancel_button: Option<String>,
     submit_button: Option<String>,
     style: Style,
@@ -26,6 +27,7 @@ impl Form {
         Self {
             fields: Vec::new(),
             focus: FormFocus::None,
+            state: FormState::Active,
             cancel_button: None,
             submit_button: None,
             style: Style::default(),
@@ -93,6 +95,9 @@ impl Form {
         }
 
         match key_event.code {
+            KeyCode::Esc => {
+                self.state = FormState::Cancelled;
+            }
             KeyCode::Enter if self.focus == FormFocus::SubmitButton => {
                 self.try_submit();
                 return;
@@ -128,8 +133,12 @@ impl Form {
         }
 
         if self.validation_errors.is_empty() {
-            // TODO: Implementar forma de devolver el resultado del formulario
-            // self.result = FormResult::Submitted;
+            let results = self
+                .fields
+                .iter()
+                .map(|f| (f.label().to_owned(), f.value()))
+                .collect::<Vec<_>>();
+            self.state = FormState::Submitted(results);
         } else {
             if let Some(error) = self.validation_errors.first() {
                 for (i, field) in self.fields.iter().enumerate() {
@@ -324,4 +333,10 @@ enum FormFocus {
     SubmitButton,
     CancelButton,
     None,
+}
+
+enum FormState {
+    Active,
+    Cancelled,
+    Submitted(Vec<(String, FieldValue)>),
 }

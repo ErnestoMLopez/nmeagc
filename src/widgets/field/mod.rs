@@ -15,6 +15,9 @@ pub trait Field: WidgetRef + Send + Sync {
     /// Returns the display label for this field.
     fn label(&self) -> &str;
 
+    /// Returns the final input value
+    fn value(&self) -> FieldValue;
+
     /// Sets the style for the field in a non focused state
     fn style(&mut self, style: Style);
 
@@ -42,4 +45,11 @@ pub trait Field: WidgetRef + Send + Sync {
 
     /// Returns whether this field is required.
     fn is_required(&self) -> bool;
+}
+
+pub enum FieldValue {
+    Bool(bool),
+    Int(i64),
+    Float(f64),
+    Text(String),
 }

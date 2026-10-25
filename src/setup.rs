@@ -21,6 +21,10 @@ pub struct SourceSetup {
 }
 
 impl SourceSetup {
+    const BAUD_RATES: [u32; 10] = [
+        1200, 2400, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
+    ];
+
     /// Creates a new [`SourceSetup`] instance to implement the client interactive setup
     pub fn new() -> Self {
         Self {
@@ -42,29 +46,23 @@ impl SourceSetup {
                 )
                 .field(
                     ChoiceInput::new("Baud rate")
-                        .options(vec![
-                            (FieldValue::Int(1200), "1200"),
-                            (FieldValue::Int(2400), "2400"),
-                            (FieldValue::Int(9600), "9600"),
-                            (FieldValue::Int(19200), "19200"),
-                            (FieldValue::Int(38400), "38400"),
-                            (FieldValue::Int(57600), "57600"),
-                            (FieldValue::Int(115200), "115200"),
-                            (FieldValue::Int(230400), "230400"),
-                            (FieldValue::Int(460800), "460800"),
-                            (FieldValue::Int(921600), "921600"),
-                        ])
+                        .options(
+                            SourceSetup::BAUD_RATES
+                                .into_iter()
+                                .map(|b| (FieldValue::Int(b as i64), b.to_string()))
+                                .collect(),
+                        )
                         .with_selected(FieldValue::Int(9600))
                         .required(),
                 )
                 .field(
                     ChoiceInput::new("Data bits")
-                        .options(vec![
-                            (FieldValue::Int(5), "5"),
-                            (FieldValue::Int(6), "6"),
-                            (FieldValue::Int(7), "7"),
-                            (FieldValue::Int(8), "8"),
-                        ])
+                        .options(
+                            (5..=8)
+                                .into_iter()
+                                .map(|d| (FieldValue::Int(d as i64), d.to_string()))
+                                .collect(),
+                        )
                         .required(),
                 )
                 .field(

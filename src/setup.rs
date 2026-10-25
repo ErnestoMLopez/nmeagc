@@ -135,7 +135,7 @@ impl SourceSetup {
                     return Ok(SetupAction::Continue);
                 }
             },
-            SetupStep::Config(ConfigItem::Tcp(_)) => {
+            SetupStep::Config(SourceKind::Tcp) => {
                 self.config_tcp.handle_key_event(key_event);
                 if let Some(results) = self.config_tcp.results() {
                     // TODO Replace for form parsing
@@ -149,7 +149,7 @@ impl SourceSetup {
                     Ok(SetupAction::Continue)
                 }
             }
-            SetupStep::Config(ConfigItem::Serial(_)) => {
+            SetupStep::Config(SourceKind::Serial) => {
                 self.config_serial.handle_key_event(key_event);
                 if let Some(results) = self.config_serial.results() {
                     // TODO Replace for form parsing
@@ -163,7 +163,7 @@ impl SourceSetup {
                     Ok(SetupAction::Continue)
                 }
             }
-            SetupStep::Config(ConfigItem::File(_)) => {
+            SetupStep::Config(SourceKind::File) => {
                 self.config_file.handle_key_event(key_event);
                 if let Some(results) = self.config_file.results() {
                     // TODO Replace for form parsing
@@ -188,7 +188,7 @@ impl SourceSetup {
                 self.step = SetupStep::Config(config_item);
                 Ok(SetupAction::Continue)
             }
-            SetupStep::Config(ConfigItem::Tcp(_)) => {
+            SetupStep::Config(SourceKind::Tcp) => {
                 let source = DataSource::Tcp(TcpConfig {
                     host: "127.0.0.1".to_string(), // TODO Replace for form parsing
                     port: 23000,
@@ -250,21 +250,10 @@ pub enum ConfigItem {
     File(FileOption),
 }
 
-impl From<Option<usize>> for ConfigItem {
-    fn from(value: Option<usize>) -> Self {
-        match value {
-            Some(0) => ConfigItem::Tcp(TcpOption::Host),
-            Some(1) => ConfigItem::Serial(SerialOption::Path),
-            Some(2) => ConfigItem::File(FileOption::Path),
-            _ => ConfigItem::Tcp(TcpOption::Host),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub enum SetupStep {
     Source,
-    Config(ConfigItem),
+    Config(SourceKind),
     Done,
 }
 
@@ -290,6 +279,17 @@ pub enum SourceKind {
     Tcp,
     Serial,
     File,
+}
+
+impl From<Option<usize>> for SourceKind {
+    fn from(value: Option<usize>) -> Self {
+        match value {
+            Some(0) => SourceKind::Tcp,
+            Some(1) => SourceKind::Serial,
+            Some(2) => SourceKind::File,
+            _ => SourceKind::Tcp,
+        }
+    }
 }
 
 impl SourceKind {

@@ -1,6 +1,6 @@
 use crate::app::{App, AppTab};
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
-use crate::setup::{ConfigItem, SetupStep, SourceKind};
+use crate::setup::{SetupStep, SourceKind};
 use crate::theme::THEME;
 use crate::widgets::{
     signals_monitor::{SignalInfo, SignalsMonitor},
@@ -241,11 +241,9 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
 
     match app.source_setup.step {
         SetupStep::Source => render_setup_source(app, frame, setup_area),
-        SetupStep::Config(ConfigItem::Tcp(_)) => render_setup_config_tcp(app, frame, setup_area),
-        SetupStep::Config(ConfigItem::Serial(_)) => {
-            render_setup_config_serial(app, frame, setup_area)
-        }
-        SetupStep::Config(ConfigItem::File(_)) => render_setup_config_file(app, frame, setup_area),
+        SetupStep::Config(SourceKind::Tcp) => render_setup_config_tcp(app, frame, setup_area),
+        SetupStep::Config(SourceKind::Serial) => render_setup_config_serial(app, frame, setup_area),
+        SetupStep::Config(SourceKind::File) => render_setup_config_file(app, frame, setup_area),
         _ => {}
     }
 }

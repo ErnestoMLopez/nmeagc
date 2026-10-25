@@ -18,7 +18,6 @@ pub struct SourceSetup {
     pub config_tcp: Form,
     pub config_serial: Form,
     pub config_file: Form,
-    pub error: Option<&'static str>,
 }
 
 impl SourceSetup {
@@ -109,7 +108,6 @@ impl SourceSetup {
                 .style(THEME.popups)
                 .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
-            error: None,
         }
     }
 

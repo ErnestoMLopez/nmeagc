@@ -27,7 +27,6 @@ use strum::{Display, EnumIter, FromRepr};
 const MAX_RAW_NMEA_LOGS: usize = 1000;
 
 /// Application.
-#[derive(Debug)]
 pub struct App {
     /// Indicates if the application is running.
     pub running: bool,
@@ -59,7 +58,7 @@ impl App {
         let app = Self {
             running: true,
             interactive_setup: args.interactive,
-            source_setup: SourceSetup::default(),
+            source_setup: SourceSetup::new(),
             mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
@@ -149,7 +148,7 @@ impl App {
         }
 
         if self.interactive_setup {
-            match self.source_setup.handle_key(key_event)? {
+            match self.source_setup.handle_key_event(key_event)? {
                 SetupAction::Continue => {}
                 SetupAction::Cancel => {
                     self.event_handler.send(AppEvent::Quit);

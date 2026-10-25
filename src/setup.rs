@@ -139,15 +139,45 @@ impl SourceSetup {
             },
             SetupStep::Config(ConfigItem::Tcp(_)) => {
                 self.config_tcp.handle_key_event(key_event);
-                Ok(SetupAction::Continue)
+                if let Some(results) = self.config_tcp.results() {
+                    // TODO Replace for form parsing
+                    // let config = DataSource::from(results);
+                    let source = DataSource::Tcp(TcpConfig {
+                        host: "127.0.0.1".to_string(),
+                        port: 23000,
+                    });
+                    Ok(SetupAction::Complete(source))
+                } else {
+                    Ok(SetupAction::Continue)
+                }
             }
             SetupStep::Config(ConfigItem::Serial(_)) => {
                 self.config_serial.handle_key_event(key_event);
-                Ok(SetupAction::Continue)
+                if let Some(results) = self.config_serial.results() {
+                    // TODO Replace for form parsing
+                    // let config = DataSource::from(results);
+                    let source = DataSource::Tcp(TcpConfig {
+                        host: "127.0.0.1".to_string(),
+                        port: 23000,
+                    });
+                    Ok(SetupAction::Complete(source))
+                } else {
+                    Ok(SetupAction::Continue)
+                }
             }
             SetupStep::Config(ConfigItem::File(_)) => {
                 self.config_file.handle_key_event(key_event);
-                Ok(SetupAction::Continue)
+                if let Some(results) = self.config_file.results() {
+                    // TODO Replace for form parsing
+                    // let config = DataSource::from(results);
+                    let source = DataSource::Tcp(TcpConfig {
+                        host: "127.0.0.1".to_string(),
+                        port: 23000,
+                    });
+                    Ok(SetupAction::Complete(source))
+                } else {
+                    Ok(SetupAction::Continue)
+                }
             }
             _ => Ok(SetupAction::Continue),
         }

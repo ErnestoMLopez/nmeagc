@@ -118,6 +118,19 @@ impl Form {
         }
     }
 
+    pub fn results(&self) -> Option<Vec<(String, FieldValue)>> {
+        if self.state == FormState::Submitted {
+            let results = self
+                .fields
+                .iter()
+                .map(|f| (f.label().to_owned(), f.value()))
+                .collect::<Vec<_>>();
+            Some(results)
+        } else {
+            None
+        }
+    }
+
     fn try_submit(&mut self) {
         self.validation_errors.clear();
 
@@ -133,12 +146,7 @@ impl Form {
         }
 
         if self.validation_errors.is_empty() {
-            let results = self
-                .fields
-                .iter()
-                .map(|f| (f.label().to_owned(), f.value()))
-                .collect::<Vec<_>>();
-            self.state = FormState::Submitted(results);
+            self.state = FormState::Submitted;
         } else {
             if let Some(error) = self.validation_errors.first() {
                 for (i, field) in self.fields.iter().enumerate() {
@@ -335,8 +343,9 @@ enum FormFocus {
     None,
 }
 
+#[derive(PartialEq)]
 enum FormState {
     Active,
     Cancelled,
-    Submitted(Vec<(String, FieldValue)>),
+    Submitted,
 }

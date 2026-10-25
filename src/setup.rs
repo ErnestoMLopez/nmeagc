@@ -2,7 +2,7 @@ use crate::{
     cli::{DataSource, TcpConfig},
     theme::THEME,
     widgets::{
-        field::{CheckboxInput, ChoiceInput, TextInput, Validator},
+        field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator},
         form::Form,
     },
 };
@@ -44,46 +44,50 @@ impl SourceSetup {
                 .field(
                     ChoiceInput::new("Baud rate")
                         .options(vec![
-                            ("1200", "1200"),
-                            ("2400", "2400"),
-                            ("9600", "9600"),
-                            ("19200", "19200"),
-                            ("38400", "38400"),
-                            ("57600", "57600"),
-                            ("115200", "115200"),
-                            ("230400", "230400"),
-                            ("460800", "460800"),
-                            ("921600", "921600"),
+                            (FieldValue::Int(1200), "1200"),
+                            (FieldValue::Int(2400), "2400"),
+                            (FieldValue::Int(9600), "9600"),
+                            (FieldValue::Int(19200), "19200"),
+                            (FieldValue::Int(38400), "38400"),
+                            (FieldValue::Int(57600), "57600"),
+                            (FieldValue::Int(115200), "115200"),
+                            (FieldValue::Int(230400), "230400"),
+                            (FieldValue::Int(460800), "460800"),
+                            (FieldValue::Int(921600), "921600"),
                         ])
-                        .with_selected("9600")
+                        .with_selected(FieldValue::Int(9600))
                         .required(),
                 )
                 .field(
                     ChoiceInput::new("Data bits")
                         .options(vec![
-                            ("Five", "5"),
-                            ("Six", "6"),
-                            ("Seven", "7"),
-                            ("Eight", "8"),
+                            (FieldValue::Int(5), "5"),
+                            (FieldValue::Int(6), "6"),
+                            (FieldValue::Int(7), "7"),
+                            (FieldValue::Int(8), "8"),
                         ])
                         .required(),
                 )
                 .field(
                     ChoiceInput::new("Parity")
-                        .options(vec![("None", "None"), ("Odd", "Odd"), ("Even", "Even")])
+                        .options(vec![
+                            (FieldValue::Text("None".to_string()), "None"),
+                            (FieldValue::Text("Odd".to_string()), "Odd"),
+                            (FieldValue::Text("Even".to_string()), "Even"),
+                        ])
                         .required(),
                 )
                 .field(
                     ChoiceInput::new("Stop bits")
-                        .options(vec![("One", "1"), ("Two", "2")])
+                        .options(vec![(FieldValue::Int(1), "1"), (FieldValue::Int(2), "2")])
                         .required(),
                 )
                 .field(
                     ChoiceInput::new("Flow control")
                         .options(vec![
-                            ("None", "None"),
-                            ("Sw", "Software"),
-                            ("Hw", "Hardware"),
+                            (FieldValue::Text("None".to_string()), "None"),
+                            (FieldValue::Text("SW".to_string()), "Software"),
+                            (FieldValue::Text("HW".to_string()), "Hardware"),
                         ])
                         .required(),
                 )

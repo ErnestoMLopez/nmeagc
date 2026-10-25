@@ -9,14 +9,13 @@ use ratatui::{
     widgets::{List, ListState, StatefulWidget, Widget, WidgetRef},
 };
 
-#[derive(Debug)]
 pub struct ChoiceInput {
     label: String,
     style: Style,
     highlighted_style: Style,
     required: bool,
     focused: bool,
-    options: Vec<(String, String)>,
+    options: Vec<(FieldValue, String)>,
     selected: Option<usize>,
     highlighted: usize,
     pub selection: ListState, // TODO: Remove after refactor
@@ -44,9 +43,9 @@ impl ChoiceInput {
     /// This is a fluent setter method, but must be called after the options were setted through the
     /// [`ChoiceInput::option()`] or [`ChoiceInput::options()`] methods, to correctly set the index
     /// to the selected option.
-    pub fn with_selected(mut self, value: &str) -> Self {
+    pub fn with_selected(mut self, value: FieldValue) -> Self {
         for (i, (v, _)) in self.options.iter().enumerate() {
-            if v == value {
+            if *v == value {
                 self.selected = Some(i);
                 self.selection.select(Some(i)); // TODO: Remove after refactor
                 break;
@@ -68,15 +67,15 @@ impl ChoiceInput {
     }
 
     /// Adds an option to the select.
-    pub fn option(mut self, value: impl Into<String>, display: impl Into<String>) -> Self {
-        self.options.push((value.into(), display.into()));
+    pub fn option(mut self, value: FieldValue, display: impl Into<String>) -> Self {
+        self.options.push((value, display.into()));
         self
     }
 
     /// Adds multiple options at once.
-    pub fn options(mut self, options: Vec<(impl Into<String>, impl Into<String>)>) -> Self {
+    pub fn options(mut self, options: Vec<(FieldValue, impl Into<String>)>) -> Self {
         for (value, display) in options {
-            self.options.push((value.into(), display.into()));
+            self.options.push((value, display.into()));
         }
         self
     }

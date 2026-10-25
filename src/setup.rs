@@ -201,55 +201,6 @@ impl SourceSetup {
     }
 }
 
-pub struct ConfigTcp {
-    pub host: TextInput,
-    pub port: TextInput,
-}
-
-pub struct ConfigSerial {
-    pub path: TextInput,
-    pub baudrate: ChoiceInput,
-    pub data_bits: ChoiceInput,
-    pub parity: ChoiceInput,
-    pub stop_bits: ChoiceInput,
-    pub flow_control: ChoiceInput,
-    pub timeout: TextInput,
-    pub exclusive: CheckboxInput,
-}
-
-pub struct ConfigFile {
-    pub path: TextInput,
-}
-
-#[derive(Debug)]
-pub enum TcpOption {
-    Host,
-    Port,
-}
-
-#[derive(Debug)]
-pub enum SerialOption {
-    Path,
-    Baudrate,
-    DataBits,
-    Parity,
-    StopBits,
-    FlowControl,
-    Timeout,
-}
-
-#[derive(Debug)]
-pub enum FileOption {
-    Path,
-}
-
-#[derive(Debug)]
-pub enum ConfigItem {
-    Tcp(TcpOption),
-    Serial(SerialOption),
-    File(FileOption),
-}
-
 #[derive(Debug)]
 pub enum SetupStep {
     Source,

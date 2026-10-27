@@ -43,7 +43,7 @@ impl Default for DataSource {
     }
 }
 
-#[derive(Args, Debug, Clone)]
+#[derive(Args, Debug, Clone, Default)]
 pub struct TcpConfig {
     /// Host name for the TCP data source
     #[arg(short, long, default_value_t = "127.0.0.1".to_string(), value_name = "HOST")]
@@ -53,7 +53,7 @@ pub struct TcpConfig {
     pub port: u16,
 }
 
-#[derive(Args, Debug, Clone)]
+#[derive(Args, Debug, Clone, Default)]
 pub struct SerialConfig {
     /// Serial port path
     #[arg(display_order = 0, value_name = "PATH")]
@@ -78,17 +78,18 @@ pub struct SerialConfig {
     pub timeout: Option<u64>,
 }
 
-#[derive(Args, Debug, Clone)]
+#[derive(Args, Debug, Clone, Default)]
 pub struct FileConfig {
     /// File path
     pub path: PathBuf,
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum CliDataBits {
     Five,
     Six,
     Seven,
+    #[default]
     Eight,
 }
 
@@ -103,10 +104,11 @@ impl From<CliDataBits> for DataBits {
     }
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum CliParity {
     None,
     Odd,
+    #[default]
     Even,
 }
 
@@ -120,8 +122,9 @@ impl From<CliParity> for Parity {
     }
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum CliStopBits {
+    #[default]
     One,
     Two,
 }
@@ -135,8 +138,9 @@ impl From<CliStopBits> for StopBits {
     }
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum CliFlowControl {
+    #[default]
     None,
     Software,
     Hardware,

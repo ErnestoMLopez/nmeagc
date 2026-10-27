@@ -1,5 +1,5 @@
 use crate::{
-    cli::{DataSource, TcpConfig},
+    cli::{DataSource, FileConfig, SerialConfig, TcpConfig},
     theme::THEME,
     widgets::{
         field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator},
@@ -135,44 +135,32 @@ impl SourceSetup {
             },
             SetupStep::Config(SourceKind::Tcp) => {
                 self.config_tcp.handle_key_event(key_event);
-                if let Some(results) = self.config_tcp.results() {
-                    // TODO Replace for form parsing
-                    // let config = DataSource::from(results);
-                    let source = DataSource::Tcp(TcpConfig {
-                        host: "127.0.0.1".to_string(),
-                        port: 23000,
-                    });
-                    Ok(SetupAction::Complete(source))
-                } else {
-                    Ok(SetupAction::Continue)
+                match self.config_tcp.results() {
+                    None => Ok(SetupAction::Continue),
+                    Some(results) => {
+                        let source = DataSource::from((SourceKind::Tcp, results));
+                        Ok(SetupAction::Complete(source))
+                    }
                 }
             }
             SetupStep::Config(SourceKind::Serial) => {
                 self.config_serial.handle_key_event(key_event);
-                if let Some(results) = self.config_serial.results() {
-                    // TODO Replace for form parsing
-                    // let config = DataSource::from(results);
-                    let source = DataSource::Tcp(TcpConfig {
-                        host: "127.0.0.1".to_string(),
-                        port: 23000,
-                    });
-                    Ok(SetupAction::Complete(source))
-                } else {
-                    Ok(SetupAction::Continue)
+                match self.config_serial.results() {
+                    None => Ok(SetupAction::Continue),
+                    Some(results) => {
+                        let source = DataSource::from((SourceKind::Serial, results));
+                        Ok(SetupAction::Complete(source))
+                    }
                 }
             }
             SetupStep::Config(SourceKind::File) => {
                 self.config_file.handle_key_event(key_event);
-                if let Some(results) = self.config_file.results() {
-                    // TODO Replace for form parsing
-                    // let config = DataSource::from(results);
-                    let source = DataSource::Tcp(TcpConfig {
-                        host: "127.0.0.1".to_string(),
-                        port: 23000,
-                    });
-                    Ok(SetupAction::Complete(source))
-                } else {
-                    Ok(SetupAction::Continue)
+                match self.config_file.results() {
+                    None => Ok(SetupAction::Continue),
+                    Some(results) => {
+                        let source = DataSource::from((SourceKind::File, results));
+                        Ok(SetupAction::Complete(source))
+                    }
                 }
             }
             _ => Ok(SetupAction::Continue),
@@ -249,6 +237,36 @@ impl SourceKind {
             Self::Tcp => "TCP stream",
             Self::Serial => "Serial port",
             Self::File => "File",
+        }
+    }
+}
+
+impl From<(SourceKind, Vec<(String, FieldValue)>)> for DataSource {
+    fn from(input: (SourceKind, Vec<(String, FieldValue)>)) -> Self {
+        match input.0 {
+            SourceKind::Tcp => {
+                let mut tcp_config = TcpConfig::default();
+                for (field, value) in input.1.iter() {
+                    match (field.as_str(), value) {
+                        ("Host", FieldValue::Text(v)) => {
+                            tcp_config.host = v.clone();
+                        }
+                        ("Port", FieldValue::Text(v)) => {
+                            tcp_config.port = v.parse::<u16>().unwrap_or_default();
+                        }
+                        _ => {}
+                    }
+                }
+                DataSource::Tcp(tcp_config)
+            }
+            SourceKind::Serial => {
+                let mut serial_config = SerialConfig::default();
+                DataSource::Serial(serial_config)
+            }
+            SourceKind::File => {
+                let mut file_config = FileConfig::default();
+                DataSource::File(file_config)
+            }
         }
     }
 }

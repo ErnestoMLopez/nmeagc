@@ -1,5 +1,8 @@
 use crate::{
-    cli::{DataSource, FileConfig, SerialConfig, TcpConfig},
+    cli::{
+        CliDataBits, CliFlowControl, CliParity, CliStopBits, DataSource, FileConfig, SerialConfig,
+        TcpConfig,
+    },
     theme::THEME,
     widgets::{
         field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator},
@@ -7,7 +10,7 @@ use crate::{
     },
 };
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
@@ -138,7 +141,7 @@ impl SourceSetup {
                 match self.config_tcp.results() {
                     None => Ok(SetupAction::Continue),
                     Some(results) => {
-                        let source = DataSource::from((SourceKind::Tcp, results));
+                        let source = DataSource::Tcp(TcpConfig::from(results));
                         Ok(SetupAction::Complete(source))
                     }
                 }
@@ -148,7 +151,7 @@ impl SourceSetup {
                 match self.config_serial.results() {
                     None => Ok(SetupAction::Continue),
                     Some(results) => {
-                        let source = DataSource::from((SourceKind::Serial, results));
+                        let source = DataSource::Serial(SerialConfig::from(results));
                         Ok(SetupAction::Complete(source))
                     }
                 }
@@ -158,7 +161,7 @@ impl SourceSetup {
                 match self.config_file.results() {
                     None => Ok(SetupAction::Continue),
                     Some(results) => {
-                        let source = DataSource::from((SourceKind::File, results));
+                        let source = DataSource::File(FileConfig::from(results));
                         Ok(SetupAction::Complete(source))
                     }
                 }
@@ -241,32 +244,72 @@ impl SourceKind {
     }
 }
 
-impl From<(SourceKind, Vec<(String, FieldValue)>)> for DataSource {
-    fn from(input: (SourceKind, Vec<(String, FieldValue)>)) -> Self {
-        match input.0 {
-            SourceKind::Tcp => {
-                let mut tcp_config = TcpConfig::default();
-                for (field, value) in input.1.iter() {
-                    match (field.as_str(), value) {
-                        ("Host", FieldValue::Text(v)) => {
-                            tcp_config.host = v.clone();
-                        }
-                        ("Port", FieldValue::Text(v)) => {
-                            tcp_config.port = v.parse::<u16>().unwrap_or_default();
-                        }
-                        _ => {}
-                    }
+impl From<Vec<(String, FieldValue)>> for TcpConfig {
+    fn from(input: Vec<(String, FieldValue)>) -> Self {
+        let mut tcp_config = TcpConfig::default();
+        for (field, value) in input.iter() {
+            match (field.as_str(), value) {
+                ("Host", FieldValue::Text(v)) => {
+                    tcp_config.host = v.clone();
                 }
-                DataSource::Tcp(tcp_config)
-            }
-            SourceKind::Serial => {
-                let mut serial_config = SerialConfig::default();
-                DataSource::Serial(serial_config)
-            }
-            SourceKind::File => {
-                let mut file_config = FileConfig::default();
-                DataSource::File(file_config)
+                ("Port", FieldValue::Text(v)) => {
+                    tcp_config.port = v.parse::<u16>().unwrap_or_default();
+                }
+                _ => {}
             }
         }
+        tcp_config
+    }
+}
+
+impl From<Vec<(String, FieldValue)>> for SerialConfig {
+    fn from(input: Vec<(String, FieldValue)>) -> Self {
+        let mut serial_config = SerialConfig::default();
+
+        for (field, value) in input.iter() {
+            match (field.as_str(), value) {
+                ("Path", FieldValue::Text(v)) => {
+                    serial_config.serial_path = v.clone();
+                }
+                // ("Baud rate", FieldValue::Int(v)) => {
+                //     serial_config.baudrate = *v as u32;
+                // }
+                // ("Data bits", FieldValue::Int(v)) => {
+                //     serial_config.data_bits = CliDataBits::from(*v as u32);
+                // }
+                // ("Parity", FieldValue::Text(v)) => {
+                //     serial_config.parity = CliParity::from(v);
+                // }
+                // ("Stop bits", FieldValue::Int(v)) => {
+                //     serial_config.stop_bits = CliStopBits::from(v);
+                // }
+                // ("Flow control", FieldValue::Text(v)) => {
+                //     serial_config.flow_control = CliFlowControl::from(v);
+                // }
+                // ("Timeout [ms]", FieldValue::Int(v)) => {
+                //     serial_config.timeout = Some(v);
+                // }
+                // ("Exclusive access", FieldValue::Bool(v)) => {
+                //     serial_config.exclusive = Some(*v);
+                // }
+                _ => {}
+            }
+        }
+        serial_config
+    }
+}
+
+impl From<Vec<(String, FieldValue)>> for FileConfig {
+    fn from(input: Vec<(String, FieldValue)>) -> Self {
+        let mut file_config = FileConfig::default();
+        for (field, value) in input.iter() {
+            match (field.as_str(), value) {
+                ("Path", FieldValue::Text(v)) => {
+                    file_config.path = PathBuf::from(v);
+                }
+                _ => {}
+            }
+        }
+        file_config
     }
 }

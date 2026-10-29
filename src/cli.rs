@@ -76,6 +76,9 @@ pub struct SerialConfig {
     /// Read timeout in milliseconds
     #[arg(long)]
     pub timeout: Option<u64>,
+    /// Flag to indicate exclusive access to the port
+    #[arg(short = 'x')]
+    pub exclusive: Option<bool>,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -190,6 +193,7 @@ mod tests {
                 stop_bits: CliStopBits::One,
                 flow_control: CliFlowControl::None,
                 timeout: None,
+                exclusive: None,
             })) if path == "/dev/ttyUSB0"
         ));
     }

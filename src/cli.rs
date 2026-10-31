@@ -96,6 +96,18 @@ pub enum CliDataBits {
     Eight,
 }
 
+impl From<u32> for CliDataBits {
+    fn from(bits: u32) -> Self {
+        match bits {
+            5 => CliDataBits::Five,
+            6 => CliDataBits::Six,
+            7 => CliDataBits::Seven,
+            8 => CliDataBits::Eight,
+            _ => CliDataBits::Eight,
+        }
+    }
+}
+
 impl From<CliDataBits> for DataBits {
     fn from(bits: CliDataBits) -> Self {
         match bits {
@@ -115,6 +127,17 @@ pub enum CliParity {
     Even,
 }
 
+impl From<&str> for CliParity {
+    fn from(p: &str) -> Self {
+        match p {
+            "None" => CliParity::None,
+            "Odd" => CliParity::Odd,
+            "Even" => CliParity::Even,
+            _ => CliParity::Even,
+        }
+    }
+}
+
 impl From<CliParity> for Parity {
     fn from(p: CliParity) -> Self {
         match p {
@@ -132,6 +155,16 @@ pub enum CliStopBits {
     Two,
 }
 
+impl From<u32> for CliStopBits {
+    fn from(s: u32) -> Self {
+        match s {
+            1 => CliStopBits::One,
+            2 => CliStopBits::Two,
+            _ => CliStopBits::One,
+        }
+    }
+}
+
 impl From<CliStopBits> for StopBits {
     fn from(s: CliStopBits) -> Self {
         match s {
@@ -147,6 +180,17 @@ pub enum CliFlowControl {
     None,
     Software,
     Hardware,
+}
+
+impl From<&str> for CliFlowControl {
+    fn from(f: &str) -> Self {
+        match f {
+            "None" => CliFlowControl::None,
+            "Software" => CliFlowControl::Software,
+            "Hardware" => CliFlowControl::Hardware,
+            _ => CliFlowControl::None,
+        }
+    }
 }
 
 impl From<CliFlowControl> for FlowControl {

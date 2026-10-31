@@ -271,27 +271,27 @@ impl From<Vec<(String, FieldValue)>> for SerialConfig {
                 ("Path", FieldValue::Text(v)) => {
                     serial_config.serial_path = v.clone();
                 }
-                // ("Baud rate", FieldValue::Int(v)) => {
-                //     serial_config.baudrate = *v as u32;
-                // }
-                // ("Data bits", FieldValue::Int(v)) => {
-                //     serial_config.data_bits = CliDataBits::from(*v as u32);
-                // }
-                // ("Parity", FieldValue::Text(v)) => {
-                //     serial_config.parity = CliParity::from(v);
-                // }
-                // ("Stop bits", FieldValue::Int(v)) => {
-                //     serial_config.stop_bits = CliStopBits::from(v);
-                // }
-                // ("Flow control", FieldValue::Text(v)) => {
-                //     serial_config.flow_control = CliFlowControl::from(v);
-                // }
-                // ("Timeout [ms]", FieldValue::Int(v)) => {
-                //     serial_config.timeout = Some(v);
-                // }
-                // ("Exclusive access", FieldValue::Bool(v)) => {
-                //     serial_config.exclusive = Some(*v);
-                // }
+                ("Baud rate", FieldValue::Int(v)) => {
+                    serial_config.baudrate = *v as u32;
+                }
+                ("Data bits", FieldValue::Int(v)) => {
+                    serial_config.data_bits = CliDataBits::from(*v as u32);
+                }
+                ("Parity", FieldValue::Text(v)) => {
+                    serial_config.parity = CliParity::from(v.as_str());
+                }
+                ("Stop bits", FieldValue::Int(v)) => {
+                    serial_config.stop_bits = CliStopBits::from(*v as u32);
+                }
+                ("Flow control", FieldValue::Text(v)) => {
+                    serial_config.flow_control = CliFlowControl::from(v.as_str());
+                }
+                ("Timeout [ms]", FieldValue::Text(v)) => {
+                    serial_config.timeout = v.parse::<u64>().ok();
+                }
+                ("Exclusive access", FieldValue::Bool(v)) => {
+                    serial_config.exclusive = Some(*v);
+                }
                 _ => {}
             }
         }

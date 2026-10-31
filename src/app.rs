@@ -164,6 +164,7 @@ impl App {
                     self.event_handler.send(AppEvent::Quit);
                 }
                 SetupAction::Complete(source) => {
+                    self.interactive_setup = false;
                     self.source = source;
                     self.event_handler.send(AppEvent::ReaderSetupReady)
                 }

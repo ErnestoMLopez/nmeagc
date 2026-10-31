@@ -360,3 +360,12 @@ impl IntoIterator for FormResults {
         self.0.into_iter()
     }
 }
+
+impl<'a> IntoIterator for &'a FormResults {
+    type Item = &'a FieldResult;
+    type IntoIter = std::slice::Iter<'a, FieldResult>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.iter()
+    }
+}

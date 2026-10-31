@@ -21,6 +21,7 @@ pub struct SourceSetup {
     pub config_tcp: Form,
     pub config_serial: Form,
     pub config_file: Form,
+    pub output_file: Option<PathBuf>,
 }
 
 impl SourceSetup {
@@ -125,6 +126,7 @@ impl SourceSetup {
                 .style(THEME.popups)
                 .buttons_style(THEME.popups_button)
                 .highlight_style(THEME.popups_highlight),
+            output_file: None,
         }
     }
 
@@ -143,7 +145,8 @@ impl SourceSetup {
                 match self.config_io.results() {
                     None => Ok(SetupAction::Continue),
                     Some(results) => {
-                        let source_kind = SourceKind::from(results);
+                        let source_kind = SourceKind::from(&results);
+                        self.output_file = Option::from(&results);
                         self.step = SetupStep::SourceConfig(source_kind);
                         Ok(SetupAction::Continue)
                     }
@@ -154,7 +157,7 @@ impl SourceSetup {
                 match self.config_tcp.results() {
                     None => Ok(SetupAction::Continue),
                     Some(results) => {
-                        let source = DataSource::Tcp(TcpConfig::from(results));
+                        let source = DataSource::Tcp(TcpConfig::from(&results));
                         Ok(SetupAction::Complete(source))
                     }
                 }
@@ -164,7 +167,7 @@ impl SourceSetup {
                 match self.config_serial.results() {
                     None => Ok(SetupAction::Continue),
                     Some(results) => {
-                        let source = DataSource::Serial(SerialConfig::from(results));
+                        let source = DataSource::Serial(SerialConfig::from(&results));
                         Ok(SetupAction::Complete(source))
                     }
                 }
@@ -174,7 +177,7 @@ impl SourceSetup {
                 match self.config_file.results() {
                     None => Ok(SetupAction::Continue),
                     Some(results) => {
-                        let source = DataSource::File(FileConfig::from(results));
+                        let source = DataSource::File(FileConfig::from(&results));
                         Ok(SetupAction::Complete(source))
                     }
                 }
@@ -216,8 +219,8 @@ impl SourceKind {
     }
 }
 
-impl From<FormResults> for SourceKind {
-    fn from(results: FormResults) -> Self {
+impl From<&FormResults> for SourceKind {
+    fn from(results: &FormResults) -> Self {
         let mut source_kind = SourceKind::Tcp;
 
         for field_results in results {
@@ -241,8 +244,24 @@ impl From<FormResults> for SourceKind {
     }
 }
 
-impl From<FormResults> for TcpConfig {
-    fn from(results: FormResults) -> Self {
+impl From<&FormResults> for Option<PathBuf> {
+    fn from(results: &FormResults) -> Self {
+        let mut output = None;
+
+        for field_results in results {
+            match field_results.decompose() {
+                ("Output file", FieldValue::Text(v)) => {
+                    output = Some(v.into());
+                }
+                _ => {}
+            }
+        }
+        output
+    }
+}
+
+impl From<&FormResults> for TcpConfig {
+    fn from(results: &FormResults) -> Self {
         let mut tcp_config = TcpConfig::default();
         for field_results in results {
             match field_results.decompose() {
@@ -259,8 +278,8 @@ impl From<FormResults> for TcpConfig {
     }
 }
 
-impl From<FormResults> for SerialConfig {
-    fn from(results: FormResults) -> Self {
+impl From<&FormResults> for SerialConfig {
+    fn from(results: &FormResults) -> Self {
         let mut serial_config = SerialConfig::default();
 
         for field_results in results {
@@ -296,8 +315,8 @@ impl From<FormResults> for SerialConfig {
     }
 }
 
-impl From<FormResults> for FileConfig {
-    fn from(results: FormResults) -> Self {
+impl From<&FormResults> for FileConfig {
+    fn from(results: &FormResults) -> Self {
         let mut file_config = FileConfig::default();
         for field_results in results {
             match field_results.decompose() {

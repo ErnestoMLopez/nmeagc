@@ -97,9 +97,16 @@ impl Form {
         match key_event.code {
             KeyCode::Esc => {
                 self.state = FormState::Cancelled;
+                return;
+            }
+            KeyCode::Enter if self.focus == FormFocus::CancelButton => {
+                self.state = FormState::Cancelled;
+                return;
             }
             KeyCode::Enter if self.focus == FormFocus::SubmitButton => {
-                self.try_submit();
+                if let Some(results) = self.try_submit() {
+                    self.state = FormState::Submitted(results);
+                }
                 return;
             }
             KeyCode::Tab | KeyCode::Down => {
@@ -116,22 +123,17 @@ impl Form {
                 field.handle_key_event(&key_event);
             }
         }
+
+        // If we reached this point, it means that the form is still/again active. This occurs if we
+        // never submited, or if it was submitted and the form was reloaded to be further modified
+        self.state = FormState::Active;
     }
 
-    pub fn results(&self) -> Option<FormResults> {
-        if self.state == FormState::Submitted {
-            let results = self
-                .fields
-                .iter()
-                .map(|f| FieldResult::new(f.label(), f.value()))
-                .collect::<Vec<_>>();
-            Some(FormResults(results))
-        } else {
-            None
-        }
+    pub fn state(&self) -> &FormState {
+        &self.state
     }
 
-    fn try_submit(&mut self) {
+    fn try_submit(&mut self) -> Option<FormResults> {
         self.validation_errors.clear();
 
         // Run validators for every field storing the errors
@@ -145,8 +147,14 @@ impl Form {
             }
         }
 
+        // If there are no errors we collect the results and change state to submitted
         if self.validation_errors.is_empty() {
-            self.state = FormState::Submitted;
+            let results = self
+                .fields
+                .iter()
+                .map(|f| FieldResult::new(f.label(), f.value()))
+                .collect::<Vec<_>>();
+            Some(FormResults(results))
         } else {
             if let Some(error) = self.validation_errors.first() {
                 for (i, field) in self.fields.iter().enumerate() {
@@ -156,6 +164,7 @@ impl Form {
                     }
                 }
             }
+            None
         }
     }
 
@@ -343,11 +352,10 @@ enum FormFocus {
     None,
 }
 
-#[derive(PartialEq)]
-enum FormState {
+pub enum FormState {
     Active,
     Cancelled,
-    Submitted,
+    Submitted(FormResults),
 }
 
 pub struct FormResults(Vec<FieldResult>);

@@ -6,7 +6,7 @@ use crate::{
     theme::THEME,
     widgets::{
         field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator},
-        form::{Form, FormResults},
+        form::{Form, FormResults, FormState},
     },
 };
 
@@ -142,11 +142,12 @@ impl SourceSetup {
         match self.step {
             SetupStep::IoConfig => {
                 self.config_io.handle_key_event(key_event);
-                match self.config_io.results() {
-                    None => Ok(SetupAction::Continue),
-                    Some(results) => {
-                        let source_kind = SourceKind::from(&results);
-                        self.output_file = PathBuf::try_from(&results).ok();
+                match self.config_io.state() {
+                    FormState::Cancelled => Ok(SetupAction::Cancel),
+                    FormState::Active => Ok(SetupAction::Continue),
+                    FormState::Submitted(results) => {
+                        let source_kind = SourceKind::from(results);
+                        self.output_file = PathBuf::try_from(results).ok();
                         self.step = SetupStep::SourceConfig(source_kind);
                         Ok(SetupAction::Continue)
                     }
@@ -154,30 +155,42 @@ impl SourceSetup {
             }
             SetupStep::SourceConfig(SourceKind::Tcp) => {
                 self.config_tcp.handle_key_event(key_event);
-                match self.config_tcp.results() {
-                    None => Ok(SetupAction::Continue),
-                    Some(results) => {
-                        let source = DataSource::Tcp(TcpConfig::from(&results));
+                match self.config_tcp.state() {
+                    FormState::Cancelled => {
+                        self.step = SetupStep::IoConfig;
+                        Ok(SetupAction::Continue)
+                    }
+                    FormState::Active => Ok(SetupAction::Continue),
+                    FormState::Submitted(results) => {
+                        let source = DataSource::Tcp(TcpConfig::from(results));
                         Ok(SetupAction::Complete(source))
                     }
                 }
             }
             SetupStep::SourceConfig(SourceKind::Serial) => {
                 self.config_serial.handle_key_event(key_event);
-                match self.config_serial.results() {
-                    None => Ok(SetupAction::Continue),
-                    Some(results) => {
-                        let source = DataSource::Serial(SerialConfig::from(&results));
+                match self.config_serial.state() {
+                    FormState::Cancelled => {
+                        self.step = SetupStep::IoConfig;
+                        Ok(SetupAction::Continue)
+                    }
+                    FormState::Active => Ok(SetupAction::Continue),
+                    FormState::Submitted(results) => {
+                        let source = DataSource::Serial(SerialConfig::from(results));
                         Ok(SetupAction::Complete(source))
                     }
                 }
             }
             SetupStep::SourceConfig(SourceKind::File) => {
                 self.config_file.handle_key_event(key_event);
-                match self.config_file.results() {
-                    None => Ok(SetupAction::Continue),
-                    Some(results) => {
-                        let source = DataSource::File(FileConfig::from(&results));
+                match self.config_file.state() {
+                    FormState::Cancelled => {
+                        self.step = SetupStep::IoConfig;
+                        Ok(SetupAction::Continue)
+                    }
+                    FormState::Active => Ok(SetupAction::Continue),
+                    FormState::Submitted(results) => {
+                        let source = DataSource::File(FileConfig::from(results));
                         Ok(SetupAction::Complete(source))
                     }
                 }

@@ -146,7 +146,7 @@ impl SourceSetup {
                     None => Ok(SetupAction::Continue),
                     Some(results) => {
                         let source_kind = SourceKind::from(&results);
-                        self.output_file = Option::from(&results);
+                        self.output_file = PathBuf::try_from(&results).ok();
                         self.step = SetupStep::SourceConfig(source_kind);
                         Ok(SetupAction::Continue)
                     }
@@ -244,19 +244,18 @@ impl From<&FormResults> for SourceKind {
     }
 }
 
-impl From<&FormResults> for Option<PathBuf> {
-    fn from(results: &FormResults) -> Self {
-        let mut output = None;
-
+impl TryFrom<&FormResults> for PathBuf {
+    type Error = ();
+    fn try_from(results: &FormResults) -> Result<Self, Self::Error> {
         for field_results in results {
             match field_results.decompose() {
                 ("Output file", FieldValue::Text(v)) => {
-                    output = Some(v.into());
+                    return Ok(v.into());
                 }
                 _ => {}
             }
         }
-        output
+        Err(())
     }
 }
 

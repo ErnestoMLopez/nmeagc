@@ -54,3 +54,21 @@ pub enum FieldValue {
     Float(f64),
     Text(String),
 }
+
+pub struct FieldResult {
+    field: String,
+    value: FieldValue,
+}
+
+impl FieldResult {
+    pub fn new(field: impl Into<String>, value: FieldValue) -> Self {
+        Self {
+            field: field.into(),
+            value,
+        }
+    }
+    /// Decompose the [`FieldResult`] in a reference to its label and its final value
+    pub fn decompose(&self) -> (&str, &FieldValue) {
+        (self.field.as_str(), &self.value)
+    }
+}

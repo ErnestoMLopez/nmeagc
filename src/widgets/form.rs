@@ -1,4 +1,4 @@
-use crate::widgets::field::{Field, FieldValue, ValidationError};
+use crate::widgets::field::{Field, FieldResult, ValidationError};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{
@@ -118,14 +118,14 @@ impl Form {
         }
     }
 
-    pub fn results(&self) -> Option<Vec<(String, FieldValue)>> {
+    pub fn results(&self) -> Option<FormResults> {
         if self.state == FormState::Submitted {
             let results = self
                 .fields
                 .iter()
-                .map(|f| (f.label().to_owned(), f.value()))
+                .map(|f| FieldResult::new(f.label(), f.value()))
                 .collect::<Vec<_>>();
-            Some(results)
+            Some(FormResults(results))
         } else {
             None
         }
@@ -348,4 +348,15 @@ enum FormState {
     Active,
     Cancelled,
     Submitted,
+}
+
+pub struct FormResults(Vec<FieldResult>);
+
+impl IntoIterator for FormResults {
+    type Item = FieldResult;
+    type IntoIter = std::vec::IntoIter<Self::Item>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.0.into_iter()
+    }
 }

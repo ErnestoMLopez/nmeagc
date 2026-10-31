@@ -6,7 +6,7 @@ use crate::{
     theme::THEME,
     widgets::{
         field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator},
-        form::Form,
+        form::{Form, FormResults},
     },
 };
 
@@ -197,33 +197,11 @@ pub enum SetupAction {
     Complete(DataSource),
 }
 
-struct PathString;
-
-impl Validator for PathString {
-    fn validate(&self, value: &str) -> Result<(), String> {
-        let path = Path::new(value);
-        path.exists()
-            .then_some(())
-            .ok_or("Path does not exists".to_string())
-    }
-}
-
 #[derive(Clone, Copy, Debug)]
 pub enum SourceKind {
     Tcp,
     Serial,
     File,
-}
-
-impl From<Option<usize>> for SourceKind {
-    fn from(value: Option<usize>) -> Self {
-        match value {
-            Some(0) => SourceKind::Tcp,
-            Some(1) => SourceKind::Serial,
-            Some(2) => SourceKind::File,
-            _ => SourceKind::Tcp,
-        }
-    }
 }
 
 impl SourceKind {
@@ -238,12 +216,12 @@ impl SourceKind {
     }
 }
 
-impl From<Vec<(String, FieldValue)>> for SourceKind {
-    fn from(input: Vec<(String, FieldValue)>) -> Self {
+impl From<FormResults> for SourceKind {
+    fn from(results: FormResults) -> Self {
         let mut source_kind = SourceKind::Tcp;
 
-        for (field, value) in input.iter() {
-            match (field.as_str(), value) {
+        for field_results in results {
+            match field_results.decompose() {
                 ("Input source", FieldValue::Text(v)) => match v.as_str() {
                     v if v == SourceKind::Tcp.as_str() => {
                         source_kind = SourceKind::Tcp;
@@ -263,11 +241,11 @@ impl From<Vec<(String, FieldValue)>> for SourceKind {
     }
 }
 
-impl From<Vec<(String, FieldValue)>> for TcpConfig {
-    fn from(input: Vec<(String, FieldValue)>) -> Self {
+impl From<FormResults> for TcpConfig {
+    fn from(results: FormResults) -> Self {
         let mut tcp_config = TcpConfig::default();
-        for (field, value) in input.iter() {
-            match (field.as_str(), value) {
+        for field_results in results {
+            match field_results.decompose() {
                 ("Host", FieldValue::Text(v)) => {
                     tcp_config.host = v.clone();
                 }
@@ -281,12 +259,12 @@ impl From<Vec<(String, FieldValue)>> for TcpConfig {
     }
 }
 
-impl From<Vec<(String, FieldValue)>> for SerialConfig {
-    fn from(input: Vec<(String, FieldValue)>) -> Self {
+impl From<FormResults> for SerialConfig {
+    fn from(results: FormResults) -> Self {
         let mut serial_config = SerialConfig::default();
 
-        for (field, value) in input.iter() {
-            match (field.as_str(), value) {
+        for field_results in results {
+            match field_results.decompose() {
                 ("Path", FieldValue::Text(v)) => {
                     serial_config.serial_path = v.clone();
                 }
@@ -318,11 +296,11 @@ impl From<Vec<(String, FieldValue)>> for SerialConfig {
     }
 }
 
-impl From<Vec<(String, FieldValue)>> for FileConfig {
-    fn from(input: Vec<(String, FieldValue)>) -> Self {
+impl From<FormResults> for FileConfig {
+    fn from(results: FormResults) -> Self {
         let mut file_config = FileConfig::default();
-        for (field, value) in input.iter() {
-            match (field.as_str(), value) {
+        for field_results in results {
+            match field_results.decompose() {
                 ("Path", FieldValue::Text(v)) => {
                     file_config.path = PathBuf::from(v);
                 }
@@ -330,5 +308,16 @@ impl From<Vec<(String, FieldValue)>> for FileConfig {
             }
         }
         file_config
+    }
+}
+
+struct PathString;
+
+impl Validator for PathString {
+    fn validate(&self, value: &str) -> Result<(), String> {
+        let path = Path::new(value);
+        path.exists()
+            .then_some(())
+            .ok_or("Path does not exists".to_string())
     }
 }

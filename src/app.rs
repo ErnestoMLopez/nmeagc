@@ -95,7 +95,8 @@ impl App {
                     .flow_control(config.flow_control.into())
                     .parity(config.parity.into())
                     .stop_bits(config.stop_bits.into())
-                    .timeout(Duration::from_millis(config.timeout.unwrap_or(u64::MAX)));
+                    .timeout(Duration::from_millis(config.timeout.unwrap_or(u64::MAX)))
+                    .exclusive(config.exclusive.unwrap_or(true));
                 Box::new(builder.open().wrap_err("Error opening serial port")?)
             }
             DataSource::File(config) => {

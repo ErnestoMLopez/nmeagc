@@ -18,7 +18,6 @@ pub struct ChoiceInput {
     options: Vec<(FieldValue, String)>,
     selected: Option<usize>,
     highlighted: usize,
-    pub selection: ListState, // TODO: Remove after refactor
     is_open: bool,
 }
 
@@ -33,7 +32,6 @@ impl ChoiceInput {
             options: Vec::new(),
             selected: None,
             highlighted: 0,
-            selection: ListState::default().with_selected(Some(0)),
             is_open: false,
         }
     }
@@ -47,7 +45,6 @@ impl ChoiceInput {
         for (i, (v, _)) in self.options.iter().enumerate() {
             if *v == value {
                 self.selected = Some(i);
-                self.selection.select(Some(i)); // TODO: Remove after refactor
                 break;
             }
         }

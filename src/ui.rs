@@ -15,7 +15,7 @@ use ratatui::{
     symbols::Marker,
     text::{Line, Text},
     widgets::{
-        Block, Borders, Clear, List, Paragraph, Tabs,
+        Block, Borders, Clear, Paragraph, Tabs,
         canvas::{Canvas, Circle, Map, MapResolution, Points, Rectangle},
     },
 };
@@ -240,29 +240,23 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(Text::from(app_name).bold().centered(), app_name_area);
 
     match app.source_setup.step {
-        SetupStep::Source => render_setup_source(app, frame, setup_area),
-        SetupStep::Config(SourceKind::Tcp) => render_setup_config_tcp(app, frame, setup_area),
-        SetupStep::Config(SourceKind::Serial) => render_setup_config_serial(app, frame, setup_area),
-        SetupStep::Config(SourceKind::File) => render_setup_config_file(app, frame, setup_area),
+        SetupStep::IoConfig => render_setup_io(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::Tcp) => render_setup_tcp(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::Serial) => render_setup_serial(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::File) => render_setup_file(app, frame, setup_area),
         _ => {}
     }
 }
 
-fn render_setup_source(app: &mut App, frame: &mut Frame, area: Rect) {
+fn render_setup_io(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
-    let list_area = area.inner(Margin::new(0, 2));
+    let options_area = area.inner(Margin::new(2, 2));
 
-    let list = List::new(SourceKind::ALL.iter().map(|src| src.as_str()))
-        .style(THEME.popups)
-        .highlight_style(THEME.popups.reversed())
-        .highlight_symbol("> ");
-    let list_state = &mut app.source_setup.source_input.selection;
-
-    frame.render_widget(Text::from("Select a data source:"), area);
-    frame.render_stateful_widget(list, list_area, list_state);
+    frame.render_widget(Text::from("Enter input/output configuration:"), area);
+    frame.render_widget(&app.source_setup.config_io, options_area);
 }
 
-fn render_setup_config_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
+fn render_setup_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
     let options_area = area.inner(Margin::new(2, 2));
 
@@ -270,14 +264,14 @@ fn render_setup_config_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(&app.source_setup.config_tcp, options_area);
 }
 
-fn render_setup_config_serial(app: &mut App, frame: &mut Frame, area: Rect) {
+fn render_setup_serial(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
     let options_area = area.inner(Margin::new(2, 2));
 
     frame.render_widget(Text::from("Enter serial port configuration:"), area);
     frame.render_widget(&app.source_setup.config_serial, options_area);
 }
-fn render_setup_config_file(app: &mut App, frame: &mut Frame, area: Rect) {
+fn render_setup_file(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
     let options_area = area.inner(Margin::new(2, 2));
 

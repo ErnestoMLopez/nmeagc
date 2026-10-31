@@ -17,7 +17,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 
 pub struct SourceSetup {
     pub step: SetupStep,
-    pub source_input: ChoiceInput,
+    pub config_io: Form,
     pub config_tcp: Form,
     pub config_serial: Form,
     pub config_file: Form,
@@ -31,8 +31,24 @@ impl SourceSetup {
     /// Creates a new [`SourceSetup`] instance to implement the client interactive setup
     pub fn new() -> Self {
         Self {
-            step: SetupStep::Source,
-            source_input: ChoiceInput::new("Source"),
+            step: SetupStep::IoConfig,
+            config_io: Form::new()
+                .field(
+                    ChoiceInput::new("Input source")
+                        .options(
+                            SourceKind::ALL
+                                .into_iter()
+                                .map(|s| (FieldValue::Text(s.as_str().to_string()), s.as_str()))
+                                .collect(),
+                        )
+                        .required(),
+                )
+                .field(TextInput::new("Output file"))
+                .cancel_button("Cancel")
+                .submit_button("Next")
+                .style(THEME.popups)
+                .buttons_style(THEME.popups_button)
+                .highlight_style(THEME.popups_highlight),
             config_tcp: Form::new()
                 .field(TextInput::new("Host").required().with_input("127.0.0.1"))
                 .field(TextInput::new("Port").required().with_input("23000"))
@@ -122,21 +138,18 @@ impl SourceSetup {
         }
 
         match self.step {
-            SetupStep::Source => match key_event.code {
-                KeyCode::Up => {
-                    self.source_input.selection.select_previous();
-                    return Ok(SetupAction::Continue);
+            SetupStep::IoConfig => {
+                self.config_io.handle_key_event(key_event);
+                match self.config_io.results() {
+                    None => Ok(SetupAction::Continue),
+                    Some(results) => {
+                        let source_kind = SourceKind::from(results);
+                        self.step = SetupStep::SourceConfig(source_kind);
+                        Ok(SetupAction::Continue)
+                    }
                 }
-                KeyCode::Down => {
-                    self.source_input.selection.select_next();
-                    return Ok(SetupAction::Continue);
-                }
-                KeyCode::Enter => return self.advance(),
-                _ => {
-                    return Ok(SetupAction::Continue);
-                }
-            },
-            SetupStep::Config(SourceKind::Tcp) => {
+            }
+            SetupStep::SourceConfig(SourceKind::Tcp) => {
                 self.config_tcp.handle_key_event(key_event);
                 match self.config_tcp.results() {
                     None => Ok(SetupAction::Continue),
@@ -146,7 +159,7 @@ impl SourceSetup {
                     }
                 }
             }
-            SetupStep::Config(SourceKind::Serial) => {
+            SetupStep::SourceConfig(SourceKind::Serial) => {
                 self.config_serial.handle_key_event(key_event);
                 match self.config_serial.results() {
                     None => Ok(SetupAction::Continue),
@@ -156,7 +169,7 @@ impl SourceSetup {
                     }
                 }
             }
-            SetupStep::Config(SourceKind::File) => {
+            SetupStep::SourceConfig(SourceKind::File) => {
                 self.config_file.handle_key_event(key_event);
                 match self.config_file.results() {
                     None => Ok(SetupAction::Continue),
@@ -169,31 +182,12 @@ impl SourceSetup {
             _ => Ok(SetupAction::Continue),
         }
     }
-
-    fn advance(&mut self) -> Result<SetupAction, Error> {
-        match self.step {
-            SetupStep::Source => {
-                let config_item = self.source_input.selection.selected().into();
-                self.step = SetupStep::Config(config_item);
-                Ok(SetupAction::Continue)
-            }
-            SetupStep::Config(SourceKind::Tcp) => {
-                let source = DataSource::Tcp(TcpConfig {
-                    host: "127.0.0.1".to_string(), // TODO Replace for form parsing
-                    port: 23000,
-                });
-                self.step = SetupStep::Done;
-                Ok(SetupAction::Complete(source))
-            }
-            _ => Ok(SetupAction::Continue),
-        }
-    }
 }
 
 #[derive(Debug)]
 pub enum SetupStep {
-    Source,
-    Config(SourceKind),
+    IoConfig,
+    SourceConfig(SourceKind),
     Done,
 }
 
@@ -235,12 +229,37 @@ impl From<Option<usize>> for SourceKind {
 impl SourceKind {
     pub const ALL: [Self; 3] = [Self::Tcp, Self::Serial, Self::File];
 
-    pub fn as_str(self) -> &'static str {
+    pub const fn as_str(self) -> &'static str {
         match self {
             Self::Tcp => "TCP stream",
             Self::Serial => "Serial port",
             Self::File => "File",
         }
+    }
+}
+
+impl From<Vec<(String, FieldValue)>> for SourceKind {
+    fn from(input: Vec<(String, FieldValue)>) -> Self {
+        let mut source_kind = SourceKind::Tcp;
+
+        for (field, value) in input.iter() {
+            match (field.as_str(), value) {
+                ("Input source", FieldValue::Text(v)) => match v.as_str() {
+                    v if v == SourceKind::Tcp.as_str() => {
+                        source_kind = SourceKind::Tcp;
+                    }
+                    v if v == SourceKind::Serial.as_str() => {
+                        source_kind = SourceKind::Serial;
+                    }
+                    v if v == SourceKind::File.as_str() => {
+                        source_kind = SourceKind::File;
+                    }
+                    _ => {}
+                },
+                _ => {}
+            }
+        }
+        source_kind
     }
 }
 

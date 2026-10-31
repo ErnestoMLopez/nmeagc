@@ -12,13 +12,17 @@ pub struct Cli {
     #[arg(short, long)]
     pub interactive: bool,
 
-    /// Show this help message
-    #[arg(short = 'H', long, action = ArgAction::Help)]
-    help: Option<bool>,
+    /// Write received messages to the specified output file
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
 
     /// Specifies the source and configuration of the NMEA data.
     #[command(subcommand)]
     pub source: Option<DataSource>,
+
+    /// Show this help message
+    #[arg(short = 'H', long, action = ArgAction::Help)]
+    help: Option<bool>,
 }
 
 #[derive(Subcommand, Debug, Clone)]

@@ -8,6 +8,7 @@ use std::{
     fs::File,
     io::{BufReader, Read},
     net::TcpStream,
+    path::PathBuf,
     sync::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
@@ -17,8 +18,10 @@ use std::{
 };
 
 use circular_buffer::FixedCircularBuffer;
-use color_eyre::Result;
-use color_eyre::eyre::{Context, eyre};
+use color_eyre::{
+    Result,
+    eyre::{Context, eyre},
+};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
@@ -52,7 +55,9 @@ pub struct App {
     /// NMEA parser and data (shared between the event handler and the application).
     pub nmea_data: Arc<Mutex<Nmea>>,
     /// Selected NMEA data source.
-    pub source: DataSource,
+    input_source: DataSource,
+    /// Output file to write validated received messages
+    output_file: Option<PathBuf>,
     /// Handles of each spawned thread for graceful shutdown
     threads: Vec<JoinHandle<Result<()>>>,
 }
@@ -71,7 +76,8 @@ impl App {
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
-            source: args.source.unwrap_or_default(),
+            input_source: args.source.unwrap_or_default(),
+            output_file: None,
             threads: Vec::new(),
         };
 
@@ -90,7 +96,7 @@ impl App {
     /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
     /// parsing and event generation is done in a thread loop.
     pub fn setup_reader(&mut self) -> Result<()> {
-        let input: Box<dyn Read + Send> = match &self.source {
+        let input: Box<dyn Read + Send> = match &self.input_source {
             DataSource::Tcp(config) => {
                 let address = (&*config.host, config.port);
                 Box::new(TcpStream::connect(address).wrap_err("Error opening TCP stream")?)
@@ -163,9 +169,10 @@ impl App {
                 SetupAction::Cancel => {
                     self.event_handler.send(AppEvent::Quit);
                 }
-                SetupAction::Complete(source) => {
+                SetupAction::Complete(input, output) => {
                     self.interactive_setup = false;
-                    self.source = source;
+                    self.input_source = input;
+                    self.output_file = output;
                     self.event_handler.send(AppEvent::ReaderSetupReady)
                 }
             }

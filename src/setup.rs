@@ -162,8 +162,9 @@ impl SourceSetup {
                     }
                     FormState::Active => Ok(SetupAction::Continue),
                     FormState::Submitted(results) => {
-                        let source = DataSource::Tcp(TcpConfig::from(results));
-                        Ok(SetupAction::Complete(source))
+                        let input = DataSource::Tcp(TcpConfig::from(results));
+                        let output = self.output_file.clone();
+                        Ok(SetupAction::Complete(input, output))
                     }
                 }
             }
@@ -176,8 +177,9 @@ impl SourceSetup {
                     }
                     FormState::Active => Ok(SetupAction::Continue),
                     FormState::Submitted(results) => {
-                        let source = DataSource::Serial(SerialConfig::from(results));
-                        Ok(SetupAction::Complete(source))
+                        let input = DataSource::Serial(SerialConfig::from(results));
+                        let output = self.output_file.clone();
+                        Ok(SetupAction::Complete(input, output))
                     }
                 }
             }
@@ -190,8 +192,9 @@ impl SourceSetup {
                     }
                     FormState::Active => Ok(SetupAction::Continue),
                     FormState::Submitted(results) => {
-                        let source = DataSource::File(FileConfig::from(results));
-                        Ok(SetupAction::Complete(source))
+                        let input = DataSource::File(FileConfig::from(results));
+                        let output = self.output_file.clone();
+                        Ok(SetupAction::Complete(input, output))
                     }
                 }
             }
@@ -210,7 +213,7 @@ pub enum SetupStep {
 pub enum SetupAction {
     Continue,
     Cancel,
-    Complete(DataSource),
+    Complete(DataSource, Option<PathBuf>),
 }
 
 #[derive(Clone, Copy, Debug)]

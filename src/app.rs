@@ -8,14 +8,17 @@ use std::{
     fs::File,
     io::{BufReader, Read},
     net::TcpStream,
-    sync::{Arc, Mutex},
-    thread,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread::{self, JoinHandle},
     time::Duration,
 };
 
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
-use color_eyre::eyre::Context;
+use color_eyre::eyre::{Context, eyre};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
@@ -29,7 +32,7 @@ const MAX_RAW_NMEA_LOGS: usize = 1000;
 /// Application.
 pub struct App {
     /// Indicates if the application is running.
-    pub running: bool,
+    pub running: Arc<AtomicBool>,
     /// Indicates if the client was started in interactive mode for the source configuration
     pub interactive_setup: bool,
     /// State for the interactive setup process
@@ -50,13 +53,15 @@ pub struct App {
     pub nmea_data: Arc<Mutex<Nmea>>,
     /// Selected NMEA data source.
     pub source: DataSource,
+    /// Handles of each spawned thread for graceful shutdown
+    threads: Vec<JoinHandle<Result<()>>>,
 }
 
 impl App {
     /// Constructs a new instance of [`App`].
     pub fn new(args: Cli) -> Self {
         let app = Self {
-            running: true,
+            running: Arc::new(AtomicBool::new(true)),
             interactive_setup: args.interactive,
             source_setup: SourceSetup::new(),
             mouse_position: None,
@@ -67,6 +72,7 @@ impl App {
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
             source: args.source.unwrap_or_default(),
+            threads: Vec::new(),
         };
 
         // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
@@ -95,7 +101,7 @@ impl App {
                     .flow_control(config.flow_control.into())
                     .parity(config.parity.into())
                     .stop_bits(config.stop_bits.into())
-                    .timeout(Duration::from_millis(config.timeout.unwrap_or(u64::MAX)))
+                    .timeout(Duration::from_millis(config.timeout.unwrap_or(1000)))
                     .exclusive(config.exclusive.unwrap_or(true));
                 Box::new(builder.open().wrap_err("Error opening serial port")?)
             }
@@ -107,15 +113,18 @@ impl App {
         let reader = BufReader::new(input);
         let handler = self.event_handler.create_actor();
         let parser = Arc::clone(&self.nmea_data);
+        let running = Arc::clone(&self.running);
 
-        thread::spawn(move || run_nmea_handler(handler, reader, parser));
+        let handle = thread::spawn(move || run_nmea_handler(handler, reader, parser, running));
+
+        self.threads.push(handle);
 
         Ok(())
     }
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        while self.running {
+        while self.running.load(Ordering::Relaxed) {
             terminal.draw(|frame| self.render(frame))?;
             self.handle_events()?;
         }
@@ -133,7 +142,7 @@ impl App {
                 _ => {}
             },
             Event::App(app_event) => match app_event {
-                AppEvent::Quit => self.quit(),
+                AppEvent::Quit => self.quit()?,
                 AppEvent::ReaderSetupReady => self.setup_reader()?,
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
@@ -216,9 +225,22 @@ impl App {
     /// Handles the tick event of the terminal.
     fn tick(&mut self) {}
 
-    /// Set running to false to quit the application.
-    fn quit(&mut self) {
-        self.running = false;
+    /// Set running to false to quit the application and wait for each spawned thread.
+    fn quit(&mut self) -> Result<()> {
+        self.running.store(false, Ordering::Relaxed);
+
+        for handle in self.threads.drain(..) {
+            match handle.join() {
+                Err(_) => {
+                    return Err(eyre!("Error joining working threads"));
+                }
+                Ok(Err(e)) => {
+                    return Err(e);
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 }
 

@@ -201,6 +201,15 @@ impl SourceSetup {
             _ => Ok(SetupAction::Continue),
         }
     }
+
+    pub fn get_key_bindings(&self) -> Vec<(&str, &str)> {
+        vec![
+            ("⭾ / ⬇", "Next"),
+            ("⇧+⭾ / ⬆", "Previous"),
+            ("⏎ / ␣", "Open/Select"),
+            ("Esc / Ctrl+C", "Quit"),
+        ]
+    }
 }
 
 #[derive(Debug)]

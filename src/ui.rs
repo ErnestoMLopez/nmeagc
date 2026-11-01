@@ -13,7 +13,7 @@ use ratatui::{
     layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Rect},
     style::{Color, Style, Stylize},
     symbols::Marker,
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{
         Block, Borders, Clear, Paragraph, Tabs,
         canvas::{Canvas, Circle, Map, MapResolution, Points, Rectangle},
@@ -27,7 +27,7 @@ impl App {
         frame.render_widget(screen, frame.area());
 
         if self.interactive_setup {
-            let interactive_setup_area = centered_rect(40, 50, frame.area());
+            let interactive_setup_area = centered_rect(70, 60, frame.area());
             render_interactive_setup(self, frame, interactive_setup_area);
             return;
         }
@@ -226,10 +226,29 @@ fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(Clear, area);
+    let key_bindings = app.source_setup.get_key_bindings();
+    let key_bindings_line = Line::from(
+        key_bindings
+            .iter()
+            .enumerate()
+            .flat_map(|(i, (key, label))| {
+                vec![
+                    Span::styled("[", THEME.popups),
+                    Span::styled(*key, THEME.key_binding.key),
+                    Span::styled(" : ", THEME.key_binding.description),
+                    Span::styled(*label, THEME.key_binding.description),
+                    Span::styled("]", THEME.popups),
+                    if i != key_bindings.len() - 1 { " " } else { "" }.into(),
+                ]
+            })
+            .collect::<Vec<Span>>(),
+    )
+    .centered();
     let block = Block::default()
         .borders(Borders::ALL)
         .border_style(THEME.popups)
-        .style(THEME.popups);
+        .style(THEME.popups)
+        .title_bottom(key_bindings_line);
     let inner_area = block.inner(area);
     let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
     let [app_name_area, setup_area] = inner_area.layout(&layout);

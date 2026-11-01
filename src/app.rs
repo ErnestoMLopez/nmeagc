@@ -250,6 +250,20 @@ impl App {
         }
         Ok(())
     }
+
+    /// Returns the key bindings.
+    pub fn get_key_bindings(&self) -> Vec<(&str, &str)> {
+        if self.interactive_setup {
+            return self.source_setup.get_key_bindings();
+        }
+
+        // TODO: Add key bindings for each tab
+        match self.tab {
+            AppTab::Monitor => vec![],
+            AppTab::Map => vec![],
+            AppTab::Raw => vec![],
+        }
+    }
 }
 
 /// Application events.

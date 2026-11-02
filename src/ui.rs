@@ -226,7 +226,7 @@ fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
 
 fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(Clear, area);
-    let key_bindings = app.source_setup.get_key_bindings();
+    let key_bindings = app.setup.get_key_bindings();
     let key_bindings_line = Line::from(
         key_bindings
             .iter()
@@ -258,7 +258,7 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
     frame.render_widget(block, area);
     frame.render_widget(Text::from(app_name).bold().centered(), app_name_area);
 
-    match app.source_setup.step {
+    match app.setup.step {
         SetupStep::IoConfig => render_setup_io(app, frame, setup_area),
         SetupStep::SourceConfig(SourceKind::Tcp) => render_setup_tcp(app, frame, setup_area),
         SetupStep::SourceConfig(SourceKind::Serial) => render_setup_serial(app, frame, setup_area),
@@ -273,7 +273,7 @@ fn render_setup_io(app: &mut App, frame: &mut Frame, area: Rect) {
     let options_area = options_area.offset(Offset::new(0, 1));
 
     frame.render_widget(Text::from("Enter input/output configuration:"), area);
-    frame.render_widget(&app.source_setup.config_io, options_area);
+    frame.render_widget(&app.setup.config_io, options_area);
 }
 
 fn render_setup_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
@@ -282,7 +282,7 @@ fn render_setup_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
     let options_area = options_area.offset(Offset::new(0, 1));
 
     frame.render_widget(Text::from("Enter TCP stream configuration:"), area);
-    frame.render_widget(&app.source_setup.config_tcp, options_area);
+    frame.render_widget(&app.setup.config_tcp, options_area);
 }
 
 fn render_setup_serial(app: &mut App, frame: &mut Frame, area: Rect) {
@@ -291,7 +291,7 @@ fn render_setup_serial(app: &mut App, frame: &mut Frame, area: Rect) {
     let options_area = options_area.offset(Offset::new(0, 1));
 
     frame.render_widget(Text::from("Enter serial port configuration:"), area);
-    frame.render_widget(&app.source_setup.config_serial, options_area);
+    frame.render_widget(&app.setup.config_serial, options_area);
 }
 fn render_setup_file(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
@@ -299,7 +299,7 @@ fn render_setup_file(app: &mut App, frame: &mut Frame, area: Rect) {
     let options_area = options_area.offset(Offset::new(0, 1));
 
     frame.render_widget(Text::from("Enter input file configuration:"), area);
-    frame.render_widget(&app.source_setup.config_file, options_area);
+    frame.render_widget(&app.setup.config_file, options_area);
 }
 
 impl<'a> From<&RawNmeaLog> for Line<'a> {

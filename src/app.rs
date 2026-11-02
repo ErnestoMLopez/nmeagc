@@ -2,7 +2,7 @@ use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
-use crate::setup::{SetupAction, SourceSetup};
+use crate::setup::{AppSetup, SetupAction};
 
 use std::{
     fs::File,
@@ -36,10 +36,10 @@ const MAX_RAW_NMEA_LOGS: usize = 1000;
 pub struct App {
     /// Indicates if the application is running.
     pub running: Arc<AtomicBool>,
-    /// Indicates if the client was started in interactive mode for the source configuration
+    /// Indicates if the client was started in interactive mode for the input/output configuration
     pub interactive_setup: bool,
     /// State for the interactive setup process
-    pub source_setup: SourceSetup,
+    pub setup: AppSetup,
     /// Last recorded mouse position (for hovering detection)
     pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
@@ -68,7 +68,7 @@ impl App {
         let app = Self {
             running: Arc::new(AtomicBool::new(true)),
             interactive_setup: args.interactive,
-            source_setup: SourceSetup::new(),
+            setup: AppSetup::new(),
             mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
@@ -85,17 +85,18 @@ impl App {
         // after the main loop started. Otherwise, the interactive setup would run and send this
         // message after completion
         if !app.interactive_setup {
-            app.event_handler.send(AppEvent::ReaderSetupReady);
+            app.event_handler.send(AppEvent::SetupReady);
         }
 
         app
     }
 
-    /// Setup a reader to receive NMEA data
+    /// Performs the application setup to process NMEA data
     ///
     /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
-    /// parsing and event generation is done in a thread loop.
-    pub fn setup_reader(&mut self) -> Result<()> {
+    /// parsing and event generation is done in a thread loop. If an output file is specified, it
+    /// will be opened and the validated NMEA sentences will be written to it.
+    pub fn setup(&mut self) -> Result<()> {
         let input: Box<dyn Read + Send> = match &self.input_source {
             DataSource::Tcp(config) => {
                 let address = (&*config.host, config.port);
@@ -149,7 +150,7 @@ impl App {
             },
             Event::App(app_event) => match app_event {
                 AppEvent::Quit => self.quit()?,
-                AppEvent::ReaderSetupReady => self.setup_reader()?,
+                AppEvent::SetupReady => self.setup()?,
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
@@ -164,7 +165,7 @@ impl App {
         }
 
         if self.interactive_setup {
-            match self.source_setup.handle_key_event(key_event)? {
+            match self.setup.handle_key_event(key_event)? {
                 SetupAction::Continue => {}
                 SetupAction::Cancel => {
                     self.event_handler.send(AppEvent::Quit);
@@ -173,7 +174,7 @@ impl App {
                     self.interactive_setup = false;
                     self.input_source = input;
                     self.output_file = output;
-                    self.event_handler.send(AppEvent::ReaderSetupReady)
+                    self.event_handler.send(AppEvent::SetupReady)
                 }
             }
             return Ok(());
@@ -254,7 +255,7 @@ impl App {
     /// Returns the key bindings.
     pub fn get_key_bindings(&self) -> Vec<(&str, &str)> {
         if self.interactive_setup {
-            return self.source_setup.get_key_bindings();
+            return self.setup.get_key_bindings();
         }
 
         // TODO: Add key bindings for each tab
@@ -271,8 +272,8 @@ impl App {
 pub enum AppEvent {
     /// Quit the application.
     Quit,
-    /// Configuration for reader setup finished
-    ReaderSetupReady,
+    /// Application setup finished (via CLI or interactive setup).
+    SetupReady,
     /// NMEA message received.
     NmeaMessage(SentenceType),
     /// Raw NMEA sentence for raw data logging.

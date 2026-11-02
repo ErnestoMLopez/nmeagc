@@ -15,7 +15,7 @@ use std::path::{Path, PathBuf};
 use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
 
-pub struct SourceSetup {
+pub struct AppSetup {
     pub step: SetupStep,
     pub config_io: Form,
     pub config_tcp: Form,
@@ -24,12 +24,12 @@ pub struct SourceSetup {
     pub output_file: Option<PathBuf>,
 }
 
-impl SourceSetup {
+impl AppSetup {
     const BAUD_RATES: [u32; 10] = [
         1200, 2400, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
     ];
 
-    /// Creates a new [`SourceSetup`] instance to implement the client interactive setup
+    /// Creates a new [`AppSetup`] instance to implement the client interactive setup
     pub fn new() -> Self {
         Self {
             step: SetupStep::IoConfig,
@@ -168,7 +168,7 @@ impl SourceSetup {
             .field(
                 ChoiceInput::new("Baud rate")
                     .options(
-                        SourceSetup::BAUD_RATES
+                        AppSetup::BAUD_RATES
                             .into_iter()
                             .map(|b| (FieldValue::Int(b as i64), b.to_string()))
                             .collect(),

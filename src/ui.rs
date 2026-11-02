@@ -51,10 +51,15 @@ impl App {
 }
 
 fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
-    let layout = Layout::horizontal([Constraint::Fill(1), Constraint::Length(6)]);
+    let app_name = format! {"{} {}", crate_name!(), crate_version!()};
+
+    let layout = Layout::horizontal([
+        Constraint::Fill(1),
+        Constraint::Length(app_name.len() as u16 + 2),
+    ]);
     let [tabs_area, title_area] = area.layout(&layout);
 
-    let title = Paragraph::new("nmeagc")
+    let title = Paragraph::new(app_name)
         .right_aligned()
         .style(THEME.app_title);
     let tab_titles = AppTab::iter().map(|tab| tab.as_str());

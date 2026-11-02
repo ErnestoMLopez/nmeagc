@@ -33,104 +33,10 @@ impl SourceSetup {
     pub fn new() -> Self {
         Self {
             step: SetupStep::IoConfig,
-            config_io: Form::new()
-                .field(
-                    ChoiceInput::new("Input source")
-                        .options(
-                            SourceKind::ALL
-                                .into_iter()
-                                .map(|s| (FieldValue::Text(s.as_str().to_string()), s.as_str()))
-                                .collect(),
-                        )
-                        .required(),
-                )
-                .field(TextInput::new("Output file"))
-                .cancel_button("Cancel")
-                .submit_button("Next")
-                .style(THEME.popups)
-                .buttons_style(THEME.popups_button)
-                .highlight_style(THEME.popups_highlight),
-            config_tcp: Form::new()
-                .field(TextInput::new("Host").required().with_input("127.0.0.1"))
-                .field(
-                    TextInput::new("Port")
-                        .required()
-                        .with_input("23000")
-                        .validator(Box::new(NumericString)),
-                )
-                .cancel_button("Back")
-                .submit_button("Finish")
-                .style(THEME.popups)
-                .buttons_style(THEME.popups_button)
-                .highlight_style(THEME.popups_highlight),
-            config_serial: Form::new()
-                .field(
-                    TextInput::new("Path")
-                        .required()
-                        .validator(Box::new(PathString)),
-                )
-                .field(
-                    ChoiceInput::new("Baud rate")
-                        .options(
-                            SourceSetup::BAUD_RATES
-                                .into_iter()
-                                .map(|b| (FieldValue::Int(b as i64), b.to_string()))
-                                .collect(),
-                        )
-                        .with_selected(FieldValue::Int(9600))
-                        .required(),
-                )
-                .field(
-                    ChoiceInput::new("Data bits")
-                        .options(
-                            (5..=8)
-                                .into_iter()
-                                .map(|d| (FieldValue::Int(d as i64), d.to_string()))
-                                .collect(),
-                        )
-                        .required(),
-                )
-                .field(
-                    ChoiceInput::new("Parity")
-                        .options(vec![
-                            (FieldValue::Text("None".to_string()), "None"),
-                            (FieldValue::Text("Odd".to_string()), "Odd"),
-                            (FieldValue::Text("Even".to_string()), "Even"),
-                        ])
-                        .required(),
-                )
-                .field(
-                    ChoiceInput::new("Stop bits")
-                        .options(vec![(FieldValue::Int(1), "1"), (FieldValue::Int(2), "2")])
-                        .required(),
-                )
-                .field(
-                    ChoiceInput::new("Flow control")
-                        .options(vec![
-                            (FieldValue::Text("None".to_string()), "None"),
-                            (FieldValue::Text("SW".to_string()), "Software"),
-                            (FieldValue::Text("HW".to_string()), "Hardware"),
-                        ])
-                        .required(),
-                )
-                .field(TextInput::new("Timeout [ms]").validator(Box::new(NumericString)))
-                .field(CheckboxInput::new("Exclusive access"))
-                .cancel_button("Back")
-                .submit_button("Finish")
-                .style(THEME.popups)
-                .buttons_style(THEME.popups_button)
-                .highlight_style(THEME.popups_highlight),
-            config_file: Form::new()
-                .field(
-                    TextInput::new("Path")
-                        .required()
-                        .validator(Box::new(PathString)),
-                )
-                .cancel_button("Back")
-                .submit_button("Finish")
-                .style(THEME.popups)
-                .buttons_style(THEME.popups_button)
-                .highlight_style(THEME.popups_highlight),
+            config_io: Self::create_config_io_form(),
+            config_tcp: Self::create_config_tcp_form(),
+            config_serial: Self::create_config_serial_form(),
+            config_file: Self::create_config_file_form(),
             output_file: None,
         }
     }
@@ -214,6 +120,116 @@ impl SourceSetup {
             ("⏎ / ␣", "Open/Select"),
             ("Esc / Ctrl+C", "Quit"),
         ]
+    }
+
+    fn create_config_io_form() -> Form {
+        Form::new()
+            .field(
+                ChoiceInput::new("Input source")
+                    .options(
+                        SourceKind::ALL
+                            .into_iter()
+                            .map(|s| (FieldValue::Text(s.as_str().to_string()), s.as_str()))
+                            .collect(),
+                    )
+                    .required(),
+            )
+            .field(TextInput::new("Output file"))
+            .cancel_button("Cancel")
+            .submit_button("Next")
+            .style(THEME.popups)
+            .buttons_style(THEME.popups_button)
+            .highlight_style(THEME.popups_highlight)
+    }
+
+    fn create_config_tcp_form() -> Form {
+        Form::new()
+            .field(TextInput::new("Host").required().with_input("127.0.0.1"))
+            .field(
+                TextInput::new("Port")
+                    .required()
+                    .with_input("23000")
+                    .validator(Box::new(NumericString)),
+            )
+            .cancel_button("Back")
+            .submit_button("Finish")
+            .style(THEME.popups)
+            .buttons_style(THEME.popups_button)
+            .highlight_style(THEME.popups_highlight)
+    }
+
+    fn create_config_serial_form() -> Form {
+        Form::new()
+            .field(
+                TextInput::new("Path")
+                    .required()
+                    .validator(Box::new(PathString)),
+            )
+            .field(
+                ChoiceInput::new("Baud rate")
+                    .options(
+                        SourceSetup::BAUD_RATES
+                            .into_iter()
+                            .map(|b| (FieldValue::Int(b as i64), b.to_string()))
+                            .collect(),
+                    )
+                    .with_selected(FieldValue::Int(9600))
+                    .required(),
+            )
+            .field(
+                ChoiceInput::new("Data bits")
+                    .options(
+                        (5..=8)
+                            .into_iter()
+                            .map(|d| (FieldValue::Int(d as i64), d.to_string()))
+                            .collect(),
+                    )
+                    .required(),
+            )
+            .field(
+                ChoiceInput::new("Parity")
+                    .options(vec![
+                        (FieldValue::Text("None".to_string()), "None"),
+                        (FieldValue::Text("Odd".to_string()), "Odd"),
+                        (FieldValue::Text("Even".to_string()), "Even"),
+                    ])
+                    .required(),
+            )
+            .field(
+                ChoiceInput::new("Stop bits")
+                    .options(vec![(FieldValue::Int(1), "1"), (FieldValue::Int(2), "2")])
+                    .required(),
+            )
+            .field(
+                ChoiceInput::new("Flow control")
+                    .options(vec![
+                        (FieldValue::Text("None".to_string()), "None"),
+                        (FieldValue::Text("SW".to_string()), "Software"),
+                        (FieldValue::Text("HW".to_string()), "Hardware"),
+                    ])
+                    .required(),
+            )
+            .field(TextInput::new("Timeout [ms]").validator(Box::new(NumericString)))
+            .field(CheckboxInput::new("Exclusive access"))
+            .cancel_button("Back")
+            .submit_button("Finish")
+            .style(THEME.popups)
+            .buttons_style(THEME.popups_button)
+            .highlight_style(THEME.popups_highlight)
+    }
+
+    fn create_config_file_form() -> Form {
+        Form::new()
+            .field(
+                TextInput::new("Path")
+                    .required()
+                    .validator(Box::new(PathString)),
+            )
+            .cancel_button("Back")
+            .submit_button("Finish")
+            .style(THEME.popups)
+            .buttons_style(THEME.popups_button)
+            .highlight_style(THEME.popups_highlight)
     }
 }
 

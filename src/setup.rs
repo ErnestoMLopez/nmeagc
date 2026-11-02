@@ -52,7 +52,12 @@ impl SourceSetup {
                 .highlight_style(THEME.popups_highlight),
             config_tcp: Form::new()
                 .field(TextInput::new("Host").required().with_input("127.0.0.1"))
-                .field(TextInput::new("Port").required().with_input("23000"))
+                .field(
+                    TextInput::new("Port")
+                        .required()
+                        .with_input("23000")
+                        .validator(Box::new(NumericString)),
+                )
                 .cancel_button("Back")
                 .submit_button("Finish")
                 .style(THEME.popups)
@@ -108,7 +113,7 @@ impl SourceSetup {
                         ])
                         .required(),
                 )
-                .field(TextInput::new("Timeout [ms]"))
+                .field(TextInput::new("Timeout [ms]").validator(Box::new(NumericString)))
                 .field(CheckboxInput::new("Exclusive access"))
                 .cancel_button("Back")
                 .submit_button("Finish")
@@ -362,5 +367,22 @@ impl Validator for PathString {
         path.exists()
             .then_some(())
             .ok_or("Path does not exists".to_string())
+    }
+}
+
+struct NumericString;
+
+impl Validator for NumericString {
+    fn validate(&self, value: &str) -> Result<(), String> {
+        // Allow empty string to be valid. If the field is required, the form will handle that
+        // validation separately, if not required, the field should be considered valid if empty.
+        if value.is_empty() {
+            Ok(())
+        } else {
+            value
+                .parse::<u64>()
+                .map(|_| ())
+                .map_err(|_| "Value is not a valid number".to_string())
+        }
     }
 }

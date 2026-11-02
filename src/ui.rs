@@ -1,39 +1,405 @@
-use ratatui::{
-    buffer::Buffer,
-    layout::{Alignment, Rect},
-    style::{Color, Stylize},
-    widgets::{Block, BorderType, Paragraph, Widget},
+use crate::app::{App, AppTab};
+use crate::nmea::{RawNmeaLog, RawNmeaStatus};
+use crate::setup::{SetupStep, SourceKind};
+use crate::theme::THEME;
+use crate::widgets::{
+    signals_monitor::{SignalInfo, SignalsMonitor},
+    skyplot::{Skyplot, SkyplotSatellite},
 };
 
-use crate::app::App;
+use clap::{crate_name, crate_version};
+use ratatui::{
+    Frame,
+    layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Offset, Rect},
+    style::{Color, Style, Stylize},
+    symbols::Marker,
+    text::{Line, Span, Text},
+    widgets::{
+        Block, Borders, Clear, Paragraph, Tabs,
+        canvas::{Canvas, Circle, Map, MapResolution, Points, Rectangle},
+    },
+};
+use strum::IntoEnumIterator;
 
-impl Widget for &App {
-    /// Renders the user interface widgets.
-    ///
-    // This is where you add new widgets.
-    // See the following resources:
-    // - https://docs.rs/ratatui/latest/ratatui/widgets/index.html
-    // - https://github.com/ratatui/ratatui/tree/master/examples
-    fn render(self, area: Rect, buf: &mut Buffer) {
-        let block = Block::bordered()
-            .title("nmeagc")
-            .title_alignment(Alignment::Center)
-            .border_type(BorderType::Rounded);
+impl App {
+    pub fn render(&mut self, frame: &mut Frame) {
+        let screen = Block::new().style(THEME.root);
+        frame.render_widget(screen, frame.area());
 
-        let text = format!(
-            "This is a tui template.\n\
-                Press `Esc`, `Ctrl-C` or `q` to stop running.\n\
-                Press left and right to increment and decrement the counter respectively.\n\
-                Counter: {}",
-            self.counter
-        );
+        if self.interactive_setup {
+            let interactive_setup_area = centered_rect(60, 50, frame.area());
+            render_interactive_setup(self, frame, interactive_setup_area);
+            return;
+        }
 
-        let paragraph = Paragraph::new(text)
-            .block(block)
-            .fg(Color::Cyan)
-            .bg(Color::Black)
-            .centered();
+        let layout = Layout::vertical([
+            Constraint::Length(1),
+            Constraint::Min(0),
+            Constraint::Length(1),
+        ]);
+        let [titlebar_area, tabcontent_area, footer_area] = frame.area().layout(&layout);
 
-        paragraph.render(area, buf);
+        render_tabs_title(self, frame, titlebar_area);
+        render_footer(self, frame, footer_area);
+
+        match self.tab {
+            AppTab::Monitor => render_monitor_tab(self, frame, tabcontent_area),
+            AppTab::Map => render_map_tab(self, frame, tabcontent_area),
+            AppTab::Raw => render_raw_tab(self, frame, tabcontent_area),
+        }
     }
+}
+
+fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
+    let app_name = format! {"{} {}", crate_name!(), crate_version!()};
+
+    let layout = Layout::horizontal([
+        Constraint::Fill(1),
+        Constraint::Length(app_name.len() as u16 + 2),
+    ]);
+    let [tabs_area, title_area] = area.layout(&layout);
+
+    let title = Paragraph::new(app_name)
+        .right_aligned()
+        .style(THEME.app_title);
+    let tab_titles = AppTab::iter().map(|tab| tab.as_str());
+    let tabs = Tabs::new(tab_titles)
+        .style(THEME.tabs)
+        .highlight_style(THEME.tabs_selected)
+        .select(app.tab as usize)
+        .divider("");
+
+    frame.render_widget(title, title_area);
+    frame.render_widget(tabs, tabs_area);
+}
+
+fn render_footer(app: &App, frame: &mut Frame, area: Rect) {
+    let mouse = app.mouse_position.map_or_else(
+        || "Mouse at: (-,-)".to_string(),
+        |position| format!("Mouse at: {:?}", position),
+    );
+    let debug_data = Paragraph::new(mouse)
+        .alignment(HorizontalAlignment::Right)
+        .bg(Color::Black);
+    frame.render_widget(debug_data, area);
+}
+
+fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
+    let layout = Layout::horizontal([Constraint::Min(35), Constraint::Percentage(70)]);
+    let [left_area, right_area] = area.layout(&layout);
+
+    let layout = Layout::vertical([
+        Constraint::Max(4),
+        Constraint::Fill(1),
+        Constraint::Length(left_area.width / 2),
+    ]);
+    let [time_area, position_area, scatter_area] = left_area.layout(&layout);
+
+    let layout = Layout::vertical([Constraint::Max(15), Constraint::Min(20)]);
+    let [signals_monitor_area, lower_area] = right_area.layout(&layout);
+
+    let layout = Layout::horizontal([Constraint::Percentage(60), Constraint::Min(15)]);
+    let [chartsplot_area, skyplot_area] = lower_area.layout(&layout);
+
+    let time_block = Block::bordered().title("Time").style(THEME.borders);
+    let position_block = Block::bordered().title("Position").style(THEME.borders);
+    let scatter_block = Block::bordered().title("Scatter plot").style(THEME.borders);
+    let chartsplot_block = Block::bordered()
+        .title("Position charts")
+        .style(THEME.borders);
+
+    let nmea_data = app.nmea_data.lock().expect("mutex poisoned");
+
+    let lines = vec![
+        Line::from(format!(
+            "Latitude:  {}",
+            nmea_data
+                .latitude()
+                .map_or("-".to_string(), |lat| { format_latitude(lat) })
+        )),
+        Line::from(format!(
+            "Longitude: {}",
+            nmea_data
+                .longitude()
+                .map_or("-".to_string(), |lon| format_longitude(lon))
+        )),
+        Line::from(format!(
+            "Altitude:  {} m (MSL)",
+            nmea_data
+                .altitude()
+                .map(|alt| format!("{:.3}", alt))
+                .unwrap_or("-".to_string())
+        )),
+    ];
+    let position_text = Paragraph::new(lines).block(position_block);
+
+    let signals_monitor = SignalsMonitor::from(&*app)
+        .block(
+            Block::bordered()
+                .title("Signals monitor")
+                .style(THEME.borders),
+        )
+        .style(THEME.content);
+
+    let skyplot = Skyplot::from(&*app)
+        .block(Block::bordered().title("Skyplot").style(THEME.borders))
+        .style(THEME.content)
+        .with_hover(app.mouse_position);
+
+    frame.render_widget(time_block, time_area);
+    frame.render_widget(position_text, position_area);
+    frame.render_widget(scatter_block, scatter_area);
+    frame.render_widget(signals_monitor, signals_monitor_area);
+    frame.render_widget(chartsplot_block, chartsplot_area);
+    frame.render_widget(skyplot, skyplot_area);
+}
+
+fn render_map_tab(app: &App, frame: &mut Frame, area: Rect) {
+    let layout = Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]);
+    let [nav_area, map_area] = area.layout(&layout);
+
+    let block = Block::bordered().title("Navigation").style(THEME.borders);
+
+    let coordinates = {
+        let nmea_parser = app.nmea_data.lock().expect("mutex poisoned");
+        nmea_parser.longitude.zip(nmea_parser.latitude)
+    };
+
+    let map = Canvas::default()
+        .block(Block::bordered().title("Worldmap").style(THEME.borders))
+        .background_color(THEME.root.bg.unwrap_or(Color::Reset))
+        .marker(Marker::Braille)
+        .x_bounds([-180.0, 180.0])
+        .y_bounds([-90.0, 90.0])
+        .paint(|ctx| {
+            ctx.draw(&Map {
+                color: Color::White,
+                resolution: MapResolution::High,
+            });
+            ctx.layer();
+            if let Some((lon, lat)) = coordinates {
+                ctx.draw(&Rectangle {
+                    x: lon,
+                    y: lat,
+                    width: 1.0,
+                    height: 1.0,
+                    color: Color::Yellow,
+                });
+                ctx.draw(&Points {
+                    coords: &[(lon, lat)],
+                    color: Color::LightRed,
+                });
+                ctx.draw(&Circle {
+                    x: lon,
+                    y: lat,
+                    radius: 10.0,
+                    color: Color::Green,
+                });
+            }
+        });
+
+    frame.render_widget(block, nav_area);
+    frame.render_widget(map, map_area);
+}
+
+fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
+    let layout = Layout::horizontal([Constraint::Percentage(30), Constraint::Percentage(70)]);
+    let [left_area, right_area] = area.layout(&layout);
+    let layout = Layout::vertical([Constraint::Min(0), Constraint::Max(3)]);
+    let [upper_area, lower_area] = right_area.layout(&layout);
+
+    let msg_area = left_area;
+    let raw_area = upper_area;
+    let search_area = lower_area;
+
+    let block_msg = Block::bordered().title("Messages").style(THEME.borders);
+    let block_raw = Block::bordered().title("Raw data").style(THEME.borders);
+    let block_search = Block::bordered().title("Search").style(THEME.borders);
+
+    let logs = Text::from(
+        app.raw_data
+            .iter()
+            .map(|log| Line::from(log))
+            .collect::<Vec<Line>>(),
+    );
+
+    let scroll_offset = (app.raw_data.len() as u16).saturating_sub(raw_area.height - 2);
+
+    let logs_paragraph = Paragraph::new(logs)
+        .block(block_raw)
+        .left_aligned()
+        .scroll((scroll_offset, 0));
+
+    frame.render_widget(block_msg, msg_area);
+    frame.render_widget(logs_paragraph, raw_area);
+    frame.render_widget(block_search, search_area);
+}
+
+fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
+    frame.render_widget(Clear, area);
+    let key_bindings = app.setup.get_key_bindings();
+    let key_bindings_line = Line::from(
+        key_bindings
+            .iter()
+            .enumerate()
+            .flat_map(|(i, (key, label))| {
+                vec![
+                    Span::styled("[", THEME.popups),
+                    Span::styled(*key, THEME.key_binding.key),
+                    Span::styled(" : ", THEME.key_binding.description),
+                    Span::styled(*label, THEME.key_binding.description),
+                    Span::styled("]", THEME.popups),
+                    if i != key_bindings.len() - 1 { " " } else { "" }.into(),
+                ]
+            })
+            .collect::<Vec<Span>>(),
+    )
+    .centered();
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(THEME.popups)
+        .style(THEME.popups)
+        .title_bottom(key_bindings_line);
+    let inner_area = block.inner(area);
+    let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
+    let [app_name_area, setup_area] = inner_area.layout(&layout);
+
+    let app_name = format! {"{} {}", crate_name!(), crate_version!()};
+
+    frame.render_widget(block, area);
+    frame.render_widget(Text::from(app_name).bold().centered(), app_name_area);
+
+    match app.setup.step {
+        SetupStep::IoConfig => render_setup_io(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::Tcp) => render_setup_tcp(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::Serial) => render_setup_serial(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::File) => render_setup_file(app, frame, setup_area),
+        _ => {}
+    }
+}
+
+fn render_setup_io(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
+
+    frame.render_widget(Text::from("Enter input/output configuration:"), area);
+    frame.render_widget(&app.setup.config_io, options_area);
+}
+
+fn render_setup_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
+
+    frame.render_widget(Text::from("Enter TCP stream configuration:"), area);
+    frame.render_widget(&app.setup.config_tcp, options_area);
+}
+
+fn render_setup_serial(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
+
+    frame.render_widget(Text::from("Enter serial port configuration:"), area);
+    frame.render_widget(&app.setup.config_serial, options_area);
+}
+fn render_setup_file(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
+
+    frame.render_widget(Text::from("Enter input file configuration:"), area);
+    frame.render_widget(&app.setup.config_file, options_area);
+}
+
+impl<'a> From<&RawNmeaLog> for Line<'a> {
+    fn from(log: &RawNmeaLog) -> Self {
+        let sentence = log.sentence.clone();
+        match log.status {
+            RawNmeaStatus::Gnss => Line::styled(sentence, Style::new().gray()),
+            RawNmeaStatus::Error => Line::styled(sentence, Style::new().red()),
+            RawNmeaStatus::Other => Line::styled(sentence, Style::new().light_blue()),
+            RawNmeaStatus::Unimplemented => Line::styled(sentence, Style::new().yellow()),
+        }
+    }
+}
+
+// TODO: Mover a un módulo nuevo
+fn format_latitude(lat: f64) -> String {
+    let direction = if lat >= 0.0 { "N" } else { "S" };
+    let abs_lat = lat.abs();
+    let degrees = abs_lat.floor() as i32;
+    let minutes_raw = (abs_lat - degrees as f64) * 60.0;
+    let minutes = minutes_raw.floor() as i32;
+    let seconds = (minutes_raw - minutes as f64) * 60.0;
+
+    format!("{}° {}' {:.2}\" {}", degrees, minutes, seconds, direction)
+}
+
+fn format_longitude(lon: f64) -> String {
+    let direction = if lon >= 0.0 { "E" } else { "W" };
+    let abs_lon = lon.abs();
+    let degrees = abs_lon.floor() as i32;
+    let minutes_raw = (abs_lon - degrees as f64) * 60.0;
+    let minutes = minutes_raw.floor() as i32;
+    let seconds = (minutes_raw - minutes as f64) * 60.0;
+
+    format!("{}° {}' {:.2}\" {}", degrees, minutes, seconds, direction)
+}
+
+impl<'a> From<&App> for Skyplot<'a> {
+    fn from(app: &App) -> Self {
+        let satellites = app
+            .sv_data
+            .iter()
+            .filter_map(|sv| match (sv.elevation, sv.azimuth) {
+                (Some(elevation), Some(azimuth)) if !sv.signals.is_empty() => Some(
+                    SkyplotSatellite::new(sv.gnss, sv.svid, elevation as f64, azimuth as f64),
+                ),
+                _ => None,
+            })
+            .collect::<Vec<_>>();
+
+        Skyplot::new(satellites)
+    }
+}
+
+impl<'a> From<&App> for SignalsMonitor<'a> {
+    fn from(app: &App) -> Self {
+        let signals = app
+            .sv_data
+            .iter()
+            .map(|sv| {
+                sv.signals
+                    .iter()
+                    .map(|signal| {
+                        SignalInfo::new(signal.signal, sv.svid, signal.cn0 as u8, signal.is_used)
+                    })
+                    .collect::<Vec<_>>()
+            })
+            .flatten()
+            .collect();
+
+        SignalsMonitor::new(signals)
+    }
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(vertical[1])[1]
 }

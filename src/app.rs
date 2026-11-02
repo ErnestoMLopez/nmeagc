@@ -1,95 +1,311 @@
-use crate::event::{AppEvent, Event, EventHandler};
+use crate::cli::{Cli, DataSource};
+use crate::event::{Event, EventHandler};
+use crate::gnss::{NavigationData, SvData};
+use crate::nmea::{RawNmeaLog, run_nmea_handler};
+use crate::setup::{AppSetup, SetupAction};
 
-use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+use std::{
+    fs::File,
+    io::{BufReader, Read},
+    net::TcpStream,
+    path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread::{self, JoinHandle},
+    time::Duration,
+};
+
+use circular_buffer::FixedCircularBuffer;
+use color_eyre::{
+    Result,
+    eyre::{Context, eyre},
+};
+use crossterm::event::{
+    Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
+};
+use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
+use strum::{Display, EnumIter, FromRepr};
+
+/// Maximum amount of NMEA sentences to store and render in the raw data tab
+const MAX_RAW_NMEA_LOGS: usize = 1000;
 
 /// Application.
-#[derive(Debug)]
 pub struct App {
-    /// Is the application running?
-    pub running: bool,
-    /// Counter.
-    pub counter: u8,
+    /// Indicates if the application is running.
+    pub running: Arc<AtomicBool>,
+    /// Indicates if the client was started in interactive mode for the input/output configuration
+    pub interactive_setup: bool,
+    /// State for the interactive setup process
+    pub setup: AppSetup,
+    /// Last recorded mouse position (for hovering detection)
+    pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
-    pub events: EventHandler,
-}
-
-impl Default for App {
-    fn default() -> Self {
-        Self {
-            running: true,
-            counter: 0,
-            events: EventHandler::new(),
-        }
-    }
+    pub event_handler: EventHandler,
+    /// Current tab.
+    pub tab: AppTab,
+    /// Last navigation solution available
+    pub nav_data: NavigationData,
+    /// GNSS data table.
+    pub sv_data: Vec<SvData>,
+    /// Raw NMEA data logs.
+    pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
+    /// NMEA parser and data (shared between the event handler and the application).
+    pub nmea_data: Arc<Mutex<Nmea>>,
+    /// Selected NMEA data source.
+    input_source: DataSource,
+    /// Output file to write validated received messages
+    output_file: Option<PathBuf>,
+    /// Handles of each spawned thread for graceful shutdown
+    threads: Vec<JoinHandle<Result<()>>>,
 }
 
 impl App {
     /// Constructs a new instance of [`App`].
-    pub fn new() -> Self {
-        Self::default()
+    pub fn new(args: Cli) -> Self {
+        let app = Self {
+            running: Arc::new(AtomicBool::new(true)),
+            interactive_setup: args.interactive,
+            setup: AppSetup::new(),
+            mouse_position: None,
+            event_handler: EventHandler::new(),
+            tab: AppTab::default(),
+            nav_data: NavigationData::default(),
+            sv_data: Vec::new(),
+            raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
+            nmea_data: Arc::new(Mutex::new(Nmea::default())),
+            input_source: args.source.unwrap_or_default(),
+            output_file: None,
+            threads: Vec::new(),
+        };
+
+        // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
+        // after the main loop started. Otherwise, the interactive setup would run and send this
+        // message after completion
+        if !app.interactive_setup {
+            app.event_handler.send(AppEvent::SetupReady);
+        }
+
+        app
     }
 
-    /// Run the application's main loop.
-    pub fn run(mut self, mut terminal: DefaultTerminal) -> color_eyre::Result<()> {
-        while self.running {
-            terminal.draw(|frame| frame.render_widget(&self, frame.area()))?;
-            self.handle_events()?;
-        }
+    /// Performs the application setup to process NMEA data
+    ///
+    /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
+    /// parsing and event generation is done in a thread loop. If an output file is specified, it
+    /// will be opened and the validated NMEA sentences will be written to it.
+    pub fn setup(&mut self) -> Result<()> {
+        let input: Box<dyn Read + Send> = match &self.input_source {
+            DataSource::Tcp(config) => {
+                let address = (&*config.host, config.port);
+                Box::new(TcpStream::connect(address).wrap_err("Error opening TCP stream")?)
+            }
+            DataSource::Serial(config) => {
+                let builder = serialport::new(&config.serial_path, config.baudrate)
+                    .data_bits(config.data_bits.into())
+                    .flow_control(config.flow_control.into())
+                    .parity(config.parity.into())
+                    .stop_bits(config.stop_bits.into())
+                    .timeout(Duration::from_millis(config.timeout.unwrap_or(1000)))
+                    .exclusive(config.exclusive.unwrap_or(true));
+                Box::new(builder.open().wrap_err("Error opening serial port")?)
+            }
+            DataSource::File(config) => {
+                Box::new(File::open(&config.path).wrap_err("Error opening file")?)
+            }
+        };
+
+        let reader = BufReader::new(input);
+        let handler = self.event_handler.create_actor();
+        let parser = Arc::clone(&self.nmea_data);
+        let running = Arc::clone(&self.running);
+
+        let handle = thread::spawn(move || run_nmea_handler(handler, reader, parser, running));
+
+        self.threads.push(handle);
+
         Ok(())
     }
 
-    pub fn handle_events(&mut self) -> color_eyre::Result<()> {
-        match self.events.next()? {
+    /// Run the application's main loop.
+    pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        while self.running.load(Ordering::Relaxed) {
+            terminal.draw(|frame| self.render(frame))?;
+            self.handle_events()?;
+        }
+
+        Ok(())
+    }
+
+    /// Handles all the events emitted by the event handler.
+    fn handle_events(&mut self) -> Result<()> {
+        match self.event_handler.next()? {
             Event::Tick => self.tick(),
             Event::Crossterm(event) => match event {
-                crossterm::event::Event::Key(key_event)
-                    if key_event.kind == crossterm::event::KeyEventKind::Press =>
-                {
-                    self.handle_key_event(key_event)?
-                }
+                CrosstermEvent::Key(key_event) => self.handle_key_event(key_event)?,
+                CrosstermEvent::Mouse(mouse_event) => self.handle_mouse_event(mouse_event)?,
                 _ => {}
             },
             Event::App(app_event) => match app_event {
-                AppEvent::Increment => self.increment_counter(),
-                AppEvent::Decrement => self.decrement_counter(),
-                AppEvent::Quit => self.quit(),
+                AppEvent::Quit => self.quit()?,
+                AppEvent::SetupReady => self.setup()?,
+                AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
+                AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
         }
         Ok(())
     }
 
     /// Handles the key events and updates the state of [`App`].
-    pub fn handle_key_event(&mut self, key_event: KeyEvent) -> color_eyre::Result<()> {
-        match key_event.code {
-            KeyCode::Esc | KeyCode::Char('q') => self.events.send(AppEvent::Quit),
-            KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
-                self.events.send(AppEvent::Quit)
+    fn handle_key_event(&mut self, key_event: KeyEvent) -> Result<()> {
+        if key_event.kind != crossterm::event::KeyEventKind::Press {
+            return Ok(());
+        }
+
+        if self.interactive_setup {
+            match self.setup.handle_key_event(key_event)? {
+                SetupAction::Continue => {}
+                SetupAction::Cancel => {
+                    self.event_handler.send(AppEvent::Quit);
+                }
+                SetupAction::Complete(input, output) => {
+                    self.interactive_setup = false;
+                    self.input_source = input;
+                    self.output_file = output;
+                    self.event_handler.send(AppEvent::SetupReady)
+                }
             }
-            KeyCode::Right => self.events.send(AppEvent::Increment),
-            KeyCode::Left => self.events.send(AppEvent::Decrement),
-            // Other handlers you could add here.
+            return Ok(());
+        }
+
+        match key_event.code {
+            KeyCode::Esc | KeyCode::Char('q') => self.event_handler.send(AppEvent::Quit),
+            KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
+                self.event_handler.send(AppEvent::Quit)
+            }
+            KeyCode::Tab => self.tab.next(),
+            KeyCode::Right => self.tab.next(),
+            KeyCode::Left => self.tab.prev(),
             _ => {}
         }
         Ok(())
     }
 
+    /// Handles the mouse events and updates the state of [`App`].
+    fn handle_mouse_event(&mut self, mouse_event: MouseEvent) -> Result<()> {
+        match mouse_event.kind {
+            MouseEventKind::Down(_) => {
+                // Handle mouse click events here
+            }
+            MouseEventKind::Up(_) => {
+                // Handle mouse release events here
+            }
+            MouseEventKind::Drag(_) => {
+                // Handle mouse drag events here
+            }
+            MouseEventKind::Moved => {
+                self.mouse_position = Some((mouse_event.column, mouse_event.row))
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_nmea_msg(&mut self, nmea_msg: SentenceType) -> Result<()> {
+        match nmea_msg {
+            SentenceType::GGA => self.update_from_gga(),
+            SentenceType::RMC => self.update_from_rmc(),
+            SentenceType::GNS => {}
+            SentenceType::GSA => {}
+            SentenceType::GSV => self.update_from_gsv(),
+            SentenceType::GLL => {}
+            _ => {}
+        }
+        Ok(())
+    }
+
+    fn handle_raw_nmea(&mut self, raw: RawNmeaLog) -> Result<()> {
+        self.raw_data.push_back(raw);
+        Ok(())
+    }
+
     /// Handles the tick event of the terminal.
-    ///
-    /// The tick event is where you can update the state of your application with any logic that
-    /// needs to be updated at a fixed frame rate. E.g. polling a server, updating an animation.
-    pub fn tick(&self) {}
+    fn tick(&mut self) {}
 
-    /// Set running to false to quit the application.
-    pub fn quit(&mut self) {
-        self.running = false;
+    /// Set running to false to quit the application and wait for each spawned thread.
+    fn quit(&mut self) -> Result<()> {
+        self.running.store(false, Ordering::Relaxed);
+
+        for handle in self.threads.drain(..) {
+            match handle.join() {
+                Err(_) => {
+                    return Err(eyre!("Error joining working threads"));
+                }
+                Ok(Err(e)) => {
+                    return Err(e);
+                }
+                _ => {}
+            }
+        }
+        Ok(())
     }
 
-    pub fn increment_counter(&mut self) {
-        self.counter = self.counter.saturating_add(1);
+    /// Returns the key bindings.
+    pub fn get_key_bindings(&self) -> Vec<(&str, &str)> {
+        if self.interactive_setup {
+            return self.setup.get_key_bindings();
+        }
+
+        // TODO: Add key bindings for each tab
+        match self.tab {
+            AppTab::Monitor => vec![],
+            AppTab::Map => vec![],
+            AppTab::Raw => vec![],
+        }
+    }
+}
+
+/// Application events.
+#[derive(Clone, Debug)]
+pub enum AppEvent {
+    /// Quit the application.
+    Quit,
+    /// Application setup finished (via CLI or interactive setup).
+    SetupReady,
+    /// NMEA message received.
+    NmeaMessage(SentenceType),
+    /// Raw NMEA sentence for raw data logging.
+    RawNmeaSentence(RawNmeaLog),
+}
+
+#[derive(Debug, Clone, Copy, Default, Display, EnumIter, FromRepr, PartialEq, Eq)]
+pub enum AppTab {
+    #[default]
+    Monitor,
+    Map,
+    Raw,
+}
+
+impl AppTab {
+    fn next(&mut self) {
+        let current_index = *self as usize;
+        let next_index = current_index.saturating_add(1);
+        *self = Self::from_repr(next_index).unwrap_or(Self::default())
     }
 
-    pub fn decrement_counter(&mut self) {
-        self.counter = self.counter.saturating_sub(1);
+    fn prev(&mut self) {
+        let current_index = *self as usize;
+        let prev_index = current_index.saturating_sub(1);
+        *self = Self::from_repr(prev_index).unwrap_or(*self)
+    }
+
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Monitor => " Monitor ",
+            Self::Map => "   Map   ",
+            Self::Raw => "   Raw   ",
+        }
     }
 }

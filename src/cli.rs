@@ -12,16 +12,20 @@ pub struct Cli {
     #[arg(short, long)]
     pub interactive: bool,
 
-    /// Show this help message
-    #[arg(short = 'H', long, action = ArgAction::Help)]
-    help: Option<bool>,
+    /// Write received messages to the specified output file
+    #[arg(short, long)]
+    pub output: Option<PathBuf>,
 
     /// Specifies the source and configuration of the NMEA data.
     #[command(subcommand)]
-    pub source: DataSource,
+    pub source: Option<DataSource>,
+
+    /// Show this help message
+    #[arg(short = 'H', long, action = ArgAction::Help)]
+    help: Option<bool>,
 }
 
-#[derive(Subcommand, Debug)]
+#[derive(Subcommand, Debug, Clone)]
 pub enum DataSource {
     /// Establish a TCP connection to a host to use it as NMEA data source.
     #[command(short_flag = 't')]
@@ -34,7 +38,16 @@ pub enum DataSource {
     File(FileConfig),
 }
 
-#[derive(Args, Debug)]
+impl Default for DataSource {
+    fn default() -> Self {
+        Self::Tcp(TcpConfig {
+            host: "127.0.0.1".to_string(),
+            port: 23000,
+        })
+    }
+}
+
+#[derive(Args, Debug, Clone, Default)]
 pub struct TcpConfig {
     /// Host name for the TCP data source
     #[arg(short, long, default_value_t = "127.0.0.1".to_string(), value_name = "HOST")]
@@ -44,7 +57,7 @@ pub struct TcpConfig {
     pub port: u16,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone, Default)]
 pub struct SerialConfig {
     /// Serial port path
     #[arg(display_order = 0, value_name = "PATH")]
@@ -67,20 +80,36 @@ pub struct SerialConfig {
     /// Read timeout in milliseconds
     #[arg(long)]
     pub timeout: Option<u64>,
+    /// Flag to indicate exclusive access to the port
+    #[arg(short = 'x')]
+    pub exclusive: Option<bool>,
 }
 
-#[derive(Args, Debug)]
+#[derive(Args, Debug, Clone, Default)]
 pub struct FileConfig {
     /// File path
     pub path: PathBuf,
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum CliDataBits {
     Five,
     Six,
     Seven,
+    #[default]
     Eight,
+}
+
+impl From<u32> for CliDataBits {
+    fn from(bits: u32) -> Self {
+        match bits {
+            5 => CliDataBits::Five,
+            6 => CliDataBits::Six,
+            7 => CliDataBits::Seven,
+            8 => CliDataBits::Eight,
+            _ => CliDataBits::Eight,
+        }
+    }
 }
 
 impl From<CliDataBits> for DataBits {
@@ -94,11 +123,23 @@ impl From<CliDataBits> for DataBits {
     }
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum CliParity {
     None,
     Odd,
+    #[default]
     Even,
+}
+
+impl From<&str> for CliParity {
+    fn from(p: &str) -> Self {
+        match p {
+            "None" => CliParity::None,
+            "Odd" => CliParity::Odd,
+            "Even" => CliParity::Even,
+            _ => CliParity::Even,
+        }
+    }
 }
 
 impl From<CliParity> for Parity {
@@ -111,10 +152,21 @@ impl From<CliParity> for Parity {
     }
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum CliStopBits {
+    #[default]
     One,
     Two,
+}
+
+impl From<u32> for CliStopBits {
+    fn from(s: u32) -> Self {
+        match s {
+            1 => CliStopBits::One,
+            2 => CliStopBits::Two,
+            _ => CliStopBits::One,
+        }
+    }
 }
 
 impl From<CliStopBits> for StopBits {
@@ -126,11 +178,23 @@ impl From<CliStopBits> for StopBits {
     }
 }
 
-#[derive(ValueEnum, Clone, Copy, Debug)]
+#[derive(ValueEnum, Clone, Copy, Debug, Default)]
 pub enum CliFlowControl {
+    #[default]
     None,
     Software,
     Hardware,
+}
+
+impl From<&str> for CliFlowControl {
+    fn from(f: &str) -> Self {
+        match f {
+            "None" => CliFlowControl::None,
+            "Software" => CliFlowControl::Software,
+            "Hardware" => CliFlowControl::Hardware,
+            _ => CliFlowControl::None,
+        }
+    }
 }
 
 impl From<CliFlowControl> for FlowControl {
@@ -169,7 +233,7 @@ mod tests {
 
         assert!(matches!(
             source,
-            DataSource::Serial(SerialConfig {
+            Some(DataSource::Serial(SerialConfig {
                 serial_path: path,
                 baudrate: 9600,
                 data_bits: CliDataBits::Eight,
@@ -177,7 +241,8 @@ mod tests {
                 stop_bits: CliStopBits::One,
                 flow_control: CliFlowControl::None,
                 timeout: None,
-            }) if path == "/dev/ttyUSB0"
+                exclusive: None,
+            })) if path == "/dev/ttyUSB0"
         ));
     }
 
@@ -189,7 +254,7 @@ mod tests {
 
         assert!(matches!(
             source,
-            DataSource::File(FileConfig { path }) if path == PathBuf::from("track.nmea")
+            Some(DataSource::File(FileConfig { path })) if path == PathBuf::from("track.nmea")
         ));
     }
 

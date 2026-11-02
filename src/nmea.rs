@@ -3,8 +3,11 @@ use crate::event::{Event, EventThread};
 use crate::gnss::{Gnss, GnssSignal, SignalData, SvData};
 
 use std::{
-    io::BufRead,
-    sync::{Arc, Mutex},
+    io::{self, BufRead},
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
 };
 
 use color_eyre::{Result, eyre::WrapErr};
@@ -121,11 +124,13 @@ pub fn run_nmea_handler<R: BufRead>(
     actor: EventThread,
     mut reader: R,
     parser: Arc<Mutex<Nmea>>,
+    app_running: Arc<AtomicBool>,
 ) -> Result<()> {
     let mut line = String::new();
 
-    loop {
+    while app_running.load(Ordering::Relaxed) {
         match reader.read_line(&mut line) {
+            Err(e) if e.kind() == io::ErrorKind::TimedOut => {}
             Err(e) => return Err(e).wrap_err("Error reading serial port"),
             Ok(0) => return Ok(()),
             _ => {
@@ -170,6 +175,8 @@ pub fn run_nmea_handler<R: BufRead>(
 
         line.clear();
     }
+
+    Ok(())
 
     // for sentence in TEST_SENTENCES {
     //     thread::sleep(Duration::from_millis(1000));

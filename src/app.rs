@@ -2,19 +2,26 @@ use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
+use crate::setup::{AppSetup, SetupAction};
 
 use std::{
     fs::File,
     io::{BufReader, Read},
     net::TcpStream,
-    sync::{Arc, Mutex},
-    thread,
+    path::PathBuf,
+    sync::{
+        Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
+    },
+    thread::{self, JoinHandle},
     time::Duration,
 };
 
 use circular_buffer::FixedCircularBuffer;
-use color_eyre::Result;
-use color_eyre::eyre::Context;
+use color_eyre::{
+    Result,
+    eyre::{Context, eyre},
+};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
@@ -26,12 +33,13 @@ use strum::{Display, EnumIter, FromRepr};
 const MAX_RAW_NMEA_LOGS: usize = 1000;
 
 /// Application.
-#[derive(Debug)]
 pub struct App {
     /// Indicates if the application is running.
-    pub running: bool,
-    /// Indicates if the client was started in interactive mode for the source configuration
+    pub running: Arc<AtomicBool>,
+    /// Indicates if the client was started in interactive mode for the input/output configuration
     pub interactive_setup: bool,
+    /// State for the interactive setup process
+    pub setup: AppSetup,
     /// Last recorded mouse position (for hovering detection)
     pub mouse_position: Option<(u16, u16)>,
     /// Event handler.
@@ -47,15 +55,20 @@ pub struct App {
     /// NMEA parser and data (shared between the event handler and the application).
     pub nmea_data: Arc<Mutex<Nmea>>,
     /// Selected NMEA data source.
-    pub source: DataSource,
+    input_source: DataSource,
+    /// Output file to write validated received messages
+    output_file: Option<PathBuf>,
+    /// Handles of each spawned thread for graceful shutdown
+    threads: Vec<JoinHandle<Result<()>>>,
 }
 
 impl App {
     /// Constructs a new instance of [`App`].
     pub fn new(args: Cli) -> Self {
         let app = Self {
-            running: true,
+            running: Arc::new(AtomicBool::new(true)),
             interactive_setup: args.interactive,
+            setup: AppSetup::new(),
             mouse_position: None,
             event_handler: EventHandler::new(),
             tab: AppTab::default(),
@@ -63,25 +76,28 @@ impl App {
             sv_data: Vec::new(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
-            source: args.source,
+            input_source: args.source.unwrap_or_default(),
+            output_file: None,
+            threads: Vec::new(),
         };
 
         // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
         // after the main loop started. Otherwise, the interactive setup would run and send this
         // message after completion
         if !app.interactive_setup {
-            app.event_handler.send(AppEvent::ReaderSetupReady);
+            app.event_handler.send(AppEvent::SetupReady);
         }
 
         app
     }
 
-    /// Setup a reader to receive NMEA data
+    /// Performs the application setup to process NMEA data
     ///
     /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
-    /// parsing and event generation is done in a thread loop.
-    pub fn setup_reader(&mut self) -> Result<()> {
-        let input: Box<dyn Read + Send> = match &self.source {
+    /// parsing and event generation is done in a thread loop. If an output file is specified, it
+    /// will be opened and the validated NMEA sentences will be written to it.
+    pub fn setup(&mut self) -> Result<()> {
+        let input: Box<dyn Read + Send> = match &self.input_source {
             DataSource::Tcp(config) => {
                 let address = (&*config.host, config.port);
                 Box::new(TcpStream::connect(address).wrap_err("Error opening TCP stream")?)
@@ -92,7 +108,8 @@ impl App {
                     .flow_control(config.flow_control.into())
                     .parity(config.parity.into())
                     .stop_bits(config.stop_bits.into())
-                    .timeout(Duration::from_millis(config.timeout.unwrap_or(u64::MAX)));
+                    .timeout(Duration::from_millis(config.timeout.unwrap_or(1000)))
+                    .exclusive(config.exclusive.unwrap_or(true));
                 Box::new(builder.open().wrap_err("Error opening serial port")?)
             }
             DataSource::File(config) => {
@@ -103,15 +120,18 @@ impl App {
         let reader = BufReader::new(input);
         let handler = self.event_handler.create_actor();
         let parser = Arc::clone(&self.nmea_data);
+        let running = Arc::clone(&self.running);
 
-        thread::spawn(move || run_nmea_handler(handler, reader, parser));
+        let handle = thread::spawn(move || run_nmea_handler(handler, reader, parser, running));
+
+        self.threads.push(handle);
 
         Ok(())
     }
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        while self.running {
+        while self.running.load(Ordering::Relaxed) {
             terminal.draw(|frame| self.render(frame))?;
             self.handle_events()?;
         }
@@ -129,8 +149,8 @@ impl App {
                 _ => {}
             },
             Event::App(app_event) => match app_event {
-                AppEvent::Quit => self.quit(),
-                AppEvent::ReaderSetupReady => self.setup_reader()?,
+                AppEvent::Quit => self.quit()?,
+                AppEvent::SetupReady => self.setup()?,
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
@@ -143,6 +163,23 @@ impl App {
         if key_event.kind != crossterm::event::KeyEventKind::Press {
             return Ok(());
         }
+
+        if self.interactive_setup {
+            match self.setup.handle_key_event(key_event)? {
+                SetupAction::Continue => {}
+                SetupAction::Cancel => {
+                    self.event_handler.send(AppEvent::Quit);
+                }
+                SetupAction::Complete(input, output) => {
+                    self.interactive_setup = false;
+                    self.input_source = input;
+                    self.output_file = output;
+                    self.event_handler.send(AppEvent::SetupReady)
+                }
+            }
+            return Ok(());
+        }
+
         match key_event.code {
             KeyCode::Esc | KeyCode::Char('q') => self.event_handler.send(AppEvent::Quit),
             KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL => {
@@ -197,9 +234,36 @@ impl App {
     /// Handles the tick event of the terminal.
     fn tick(&mut self) {}
 
-    /// Set running to false to quit the application.
-    fn quit(&mut self) {
-        self.running = false;
+    /// Set running to false to quit the application and wait for each spawned thread.
+    fn quit(&mut self) -> Result<()> {
+        self.running.store(false, Ordering::Relaxed);
+
+        for handle in self.threads.drain(..) {
+            match handle.join() {
+                Err(_) => {
+                    return Err(eyre!("Error joining working threads"));
+                }
+                Ok(Err(e)) => {
+                    return Err(e);
+                }
+                _ => {}
+            }
+        }
+        Ok(())
+    }
+
+    /// Returns the key bindings.
+    pub fn get_key_bindings(&self) -> Vec<(&str, &str)> {
+        if self.interactive_setup {
+            return self.setup.get_key_bindings();
+        }
+
+        // TODO: Add key bindings for each tab
+        match self.tab {
+            AppTab::Monitor => vec![],
+            AppTab::Map => vec![],
+            AppTab::Raw => vec![],
+        }
     }
 }
 
@@ -208,8 +272,8 @@ impl App {
 pub enum AppEvent {
     /// Quit the application.
     Quit,
-    /// Configuration for reader setup finished
-    ReaderSetupReady,
+    /// Application setup finished (via CLI or interactive setup).
+    SetupReady,
     /// NMEA message received.
     NmeaMessage(SentenceType),
     /// Raw NMEA sentence for raw data logging.

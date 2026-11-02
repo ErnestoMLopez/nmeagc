@@ -1,19 +1,21 @@
 use crate::app::{App, AppTab};
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
+use crate::setup::{SetupStep, SourceKind};
 use crate::theme::THEME;
 use crate::widgets::{
     signals_monitor::{SignalInfo, SignalsMonitor},
     skyplot::{Skyplot, SkyplotSatellite},
 };
 
+use clap::{crate_name, crate_version};
 use ratatui::{
     Frame,
-    layout::{Constraint, HorizontalAlignment, Layout, Rect},
+    layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Offset, Rect},
     style::{Color, Style, Stylize},
     symbols::Marker,
-    text::{Line, Text},
+    text::{Line, Span, Text},
     widgets::{
-        Block, Paragraph, Tabs,
+        Block, Borders, Clear, Paragraph, Tabs,
         canvas::{Canvas, Circle, Map, MapResolution, Points, Rectangle},
     },
 };
@@ -23,6 +25,12 @@ impl App {
     pub fn render(&mut self, frame: &mut Frame) {
         let screen = Block::new().style(THEME.root);
         frame.render_widget(screen, frame.area());
+
+        if self.interactive_setup {
+            let interactive_setup_area = centered_rect(60, 50, frame.area());
+            render_interactive_setup(self, frame, interactive_setup_area);
+            return;
+        }
 
         let layout = Layout::vertical([
             Constraint::Length(1),
@@ -216,6 +224,84 @@ fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
     frame.render_widget(block_search, search_area);
 }
 
+fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
+    frame.render_widget(Clear, area);
+    let key_bindings = app.setup.get_key_bindings();
+    let key_bindings_line = Line::from(
+        key_bindings
+            .iter()
+            .enumerate()
+            .flat_map(|(i, (key, label))| {
+                vec![
+                    Span::styled("[", THEME.popups),
+                    Span::styled(*key, THEME.key_binding.key),
+                    Span::styled(" : ", THEME.key_binding.description),
+                    Span::styled(*label, THEME.key_binding.description),
+                    Span::styled("]", THEME.popups),
+                    if i != key_bindings.len() - 1 { " " } else { "" }.into(),
+                ]
+            })
+            .collect::<Vec<Span>>(),
+    )
+    .centered();
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(THEME.popups)
+        .style(THEME.popups)
+        .title_bottom(key_bindings_line);
+    let inner_area = block.inner(area);
+    let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
+    let [app_name_area, setup_area] = inner_area.layout(&layout);
+
+    let app_name = format! {"{} {}", crate_name!(), crate_version!()};
+
+    frame.render_widget(block, area);
+    frame.render_widget(Text::from(app_name).bold().centered(), app_name_area);
+
+    match app.setup.step {
+        SetupStep::IoConfig => render_setup_io(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::Tcp) => render_setup_tcp(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::Serial) => render_setup_serial(app, frame, setup_area),
+        SetupStep::SourceConfig(SourceKind::File) => render_setup_file(app, frame, setup_area),
+        _ => {}
+    }
+}
+
+fn render_setup_io(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
+
+    frame.render_widget(Text::from("Enter input/output configuration:"), area);
+    frame.render_widget(&app.setup.config_io, options_area);
+}
+
+fn render_setup_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
+
+    frame.render_widget(Text::from("Enter TCP stream configuration:"), area);
+    frame.render_widget(&app.setup.config_tcp, options_area);
+}
+
+fn render_setup_serial(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
+
+    frame.render_widget(Text::from("Enter serial port configuration:"), area);
+    frame.render_widget(&app.setup.config_serial, options_area);
+}
+fn render_setup_file(app: &mut App, frame: &mut Frame, area: Rect) {
+    let area = area.inner(Margin::new(2, 1));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
+
+    frame.render_widget(Text::from("Enter input file configuration:"), area);
+    frame.render_widget(&app.setup.config_file, options_area);
+}
+
 impl<'a> From<&RawNmeaLog> for Line<'a> {
     fn from(log: &RawNmeaLog) -> Self {
         let sentence = log.sentence.clone();
@@ -291,4 +377,23 @@ impl From<&App> for SignalsMonitor {
 
         SignalsMonitor::new(signals)
     }
+}
+
+fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
+    let vertical = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Percentage((100 - percent_y) / 2),
+            Constraint::Percentage(percent_y),
+            Constraint::Percentage((100 - percent_y) / 2),
+        ])
+        .split(area);
+    Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Percentage((100 - percent_x) / 2),
+            Constraint::Percentage(percent_x),
+            Constraint::Percentage((100 - percent_x) / 2),
+        ])
+        .split(vertical[1])[1]
 }

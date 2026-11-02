@@ -128,11 +128,17 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
     ];
     let position_text = Paragraph::new(lines).block(position_block);
 
-    let signals_monitor = SignalsMonitor::from(&*app);
+    let signals_monitor = SignalsMonitor::from(&*app)
+        .block(
+            Block::bordered()
+                .title("Signals monitor")
+                .style(THEME.borders),
+        )
+        .style(THEME.content);
 
     let skyplot = Skyplot::from(&*app)
         .block(Block::bordered().title("Skyplot").style(THEME.borders))
-        .style(THEME.root)
+        .style(THEME.content)
         .with_hover(app.mouse_position);
 
     frame.render_widget(time_block, time_area);
@@ -343,14 +349,9 @@ impl<'a> From<&App> for Skyplot<'a> {
             .sv_data
             .iter()
             .filter_map(|sv| match (sv.elevation, sv.azimuth) {
-                (Some(elevation), Some(azimuth)) if !sv.signals.is_empty() => {
-                    Some(SkyplotSatellite {
-                        gnss: sv.gnss,
-                        svid: sv.svid,
-                        elevation: elevation as f64,
-                        azimuth: azimuth as f64,
-                    })
-                }
+                (Some(elevation), Some(azimuth)) if !sv.signals.is_empty() => Some(
+                    SkyplotSatellite::new(sv.gnss, sv.svid, elevation as f64, azimuth as f64),
+                ),
                 _ => None,
             })
             .collect::<Vec<_>>();
@@ -359,7 +360,7 @@ impl<'a> From<&App> for Skyplot<'a> {
     }
 }
 
-impl From<&App> for SignalsMonitor {
+impl<'a> From<&App> for SignalsMonitor<'a> {
     fn from(app: &App) -> Self {
         let signals = app
             .sv_data

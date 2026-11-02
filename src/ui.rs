@@ -10,7 +10,7 @@ use crate::widgets::{
 use clap::{crate_name, crate_version};
 use ratatui::{
     Frame,
-    layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Rect},
+    layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Offset, Rect},
     style::{Color, Style, Stylize},
     symbols::Marker,
     text::{Line, Span, Text},
@@ -27,7 +27,7 @@ impl App {
         frame.render_widget(screen, frame.area());
 
         if self.interactive_setup {
-            let interactive_setup_area = centered_rect(70, 60, frame.area());
+            let interactive_setup_area = centered_rect(60, 50, frame.area());
             render_interactive_setup(self, frame, interactive_setup_area);
             return;
         }
@@ -269,7 +269,8 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
 
 fn render_setup_io(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
-    let options_area = area.inner(Margin::new(2, 2));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
 
     frame.render_widget(Text::from("Enter input/output configuration:"), area);
     frame.render_widget(&app.source_setup.config_io, options_area);
@@ -277,7 +278,8 @@ fn render_setup_io(app: &mut App, frame: &mut Frame, area: Rect) {
 
 fn render_setup_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
-    let options_area = area.inner(Margin::new(2, 2));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
 
     frame.render_widget(Text::from("Enter TCP stream configuration:"), area);
     frame.render_widget(&app.source_setup.config_tcp, options_area);
@@ -285,14 +287,16 @@ fn render_setup_tcp(app: &mut App, frame: &mut Frame, area: Rect) {
 
 fn render_setup_serial(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
-    let options_area = area.inner(Margin::new(2, 2));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
 
     frame.render_widget(Text::from("Enter serial port configuration:"), area);
     frame.render_widget(&app.source_setup.config_serial, options_area);
 }
 fn render_setup_file(app: &mut App, frame: &mut Frame, area: Rect) {
     let area = area.inner(Margin::new(2, 1));
-    let options_area = area.inner(Margin::new(2, 2));
+    let options_area = area.inner(Margin::new(2, 1));
+    let options_area = options_area.offset(Offset::new(0, 1));
 
     frame.render_widget(Text::from("Enter input file configuration:"), area);
     frame.render_widget(&app.source_setup.config_file, options_area);

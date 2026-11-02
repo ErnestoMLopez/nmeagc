@@ -28,8 +28,9 @@ pub enum RawNmeaStatus {
 }
 
 /// Solution type indicator
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, Default)]
 pub enum SolutionType {
+    #[default]
     Invalid,
     Sps2D,
     Sps3D,
@@ -40,12 +41,6 @@ pub enum SolutionType {
     Extrapolated,
     Manual,
     Simulated,
-}
-
-impl Default for SolutionType {
-    fn default() -> Self {
-        Self::Invalid
-    }
 }
 
 impl From<nmea::sentences::FixType> for SolutionType {
@@ -101,7 +96,7 @@ impl App {
         sv_data.extend(nmea_sv_data.iter().map(|satellite| {
             let gnss: Gnss = satellite.gnss_type().into();
             SvData {
-                gnss: gnss,
+                gnss,
                 svid: satellite.prn() as u8,
                 channel: None,
                 signals: vec![SignalData {

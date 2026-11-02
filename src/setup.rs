@@ -180,7 +180,6 @@ impl AppSetup {
                 ChoiceInput::new("Data bits")
                     .options(
                         (5..=8)
-                            .into_iter()
                             .map(|d| (FieldValue::Int(d as i64), d.to_string()))
                             .collect(),
                     )
@@ -270,8 +269,8 @@ impl From<&FormResults> for SourceKind {
         let mut source_kind = SourceKind::Tcp;
 
         for field_results in results {
-            match field_results.decompose() {
-                ("Input source", FieldValue::Text(v)) => match v.as_str() {
+            if let ("Input source", FieldValue::Text(v)) = field_results.decompose() {
+                match v.as_str() {
                     v if v == SourceKind::Tcp.as_str() => {
                         source_kind = SourceKind::Tcp;
                     }
@@ -282,8 +281,7 @@ impl From<&FormResults> for SourceKind {
                         source_kind = SourceKind::File;
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
         source_kind
@@ -294,11 +292,8 @@ impl TryFrom<&FormResults> for PathBuf {
     type Error = ();
     fn try_from(results: &FormResults) -> Result<Self, Self::Error> {
         for field_results in results {
-            match field_results.decompose() {
-                ("Output file", FieldValue::Text(v)) => {
-                    return Ok(v.into());
-                }
-                _ => {}
+            if let ("Output file", FieldValue::Text(v)) = field_results.decompose() {
+                return Ok(v.into());
             }
         }
         Err(())

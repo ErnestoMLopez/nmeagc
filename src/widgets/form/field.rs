@@ -3,11 +3,12 @@ mod choice;
 mod text;
 mod validation;
 
-pub use checkbox::CheckboxInput;
-pub use choice::ChoiceInput;
 use crossterm::event::KeyEvent;
 use ratatui::style::Style;
 use ratatui::widgets::WidgetRef;
+
+pub use checkbox::CheckboxInput;
+pub use choice::ChoiceInput;
 pub use text::TextInput;
 pub use validation::{ValidationError, Validator};
 

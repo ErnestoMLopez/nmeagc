@@ -146,23 +146,24 @@ impl Form {
         }
 
         // If there are no errors we collect the results and change state to submitted
-        if self.validation_errors.is_empty() {
-            let results = self
-                .fields
-                .iter()
-                .map(|f| FieldResult::new(f.label(), f.value()))
-                .collect::<Vec<_>>();
-            Some(FormResults(results))
-        } else {
-            if let Some(error) = self.validation_errors.first() {
+        match self.validation_errors.first() {
+            None => {
+                let results = self
+                    .fields
+                    .iter()
+                    .map(|f| FieldResult::new(f.label(), f.value()))
+                    .collect::<Vec<_>>();
+                Some(FormResults(results))
+            }
+            Some(error) => {
                 for (i, field) in self.fields.iter().enumerate() {
                     if field.label() == error.field {
                         self.focus_field(i);
                         break;
                     }
                 }
+                None
             }
-            None
         }
     }
 

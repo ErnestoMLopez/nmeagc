@@ -24,6 +24,12 @@ pub struct AppSetup {
     pub output_file: Option<PathBuf>,
 }
 
+impl Default for AppSetup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppSetup {
     const BAUD_RATES: [u32; 10] = [
         1200, 2400, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
@@ -180,7 +186,6 @@ impl AppSetup {
                 ChoiceInput::new("Data bits")
                     .options(
                         (5..=8)
-                            .into_iter()
                             .map(|d| (FieldValue::Int(d as i64), d.to_string()))
                             .collect(),
                     )
@@ -270,8 +275,8 @@ impl From<&FormResults> for SourceKind {
         let mut source_kind = SourceKind::Tcp;
 
         for field_results in results {
-            match field_results.decompose() {
-                ("Input source", FieldValue::Text(v)) => match v.as_str() {
+            if let ("Input source", FieldValue::Text(v)) = field_results.decompose() {
+                match v.as_str() {
                     v if v == SourceKind::Tcp.as_str() => {
                         source_kind = SourceKind::Tcp;
                     }
@@ -282,8 +287,7 @@ impl From<&FormResults> for SourceKind {
                         source_kind = SourceKind::File;
                     }
                     _ => {}
-                },
-                _ => {}
+                }
             }
         }
         source_kind
@@ -294,11 +298,8 @@ impl TryFrom<&FormResults> for PathBuf {
     type Error = ();
     fn try_from(results: &FormResults) -> Result<Self, Self::Error> {
         for field_results in results {
-            match field_results.decompose() {
-                ("Output file", FieldValue::Text(v)) => {
-                    return Ok(v.into());
-                }
-                _ => {}
+            if let ("Output file", FieldValue::Text(v)) = field_results.decompose() {
+                return Ok(v.into());
             }
         }
         Err(())
@@ -364,11 +365,8 @@ impl From<&FormResults> for FileConfig {
     fn from(results: &FormResults) -> Self {
         let mut file_config = FileConfig::default();
         for field_results in results {
-            match field_results.decompose() {
-                ("Path", FieldValue::Text(v)) => {
-                    file_config.path = PathBuf::from(v);
-                }
-                _ => {}
+            if let ("Path", FieldValue::Text(v)) = field_results.decompose() {
+                file_config.path = PathBuf::from(v);
             }
         }
         file_config

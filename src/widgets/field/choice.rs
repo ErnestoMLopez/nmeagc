@@ -79,10 +79,10 @@ impl ChoiceInput {
 
     fn toggle_open(&mut self) {
         self.is_open = !self.is_open;
-        if self.is_open {
-            if let Some(index) = self.selected {
-                self.highlighted = index;
-            }
+        if self.is_open
+            && let Some(index) = self.selected
+        {
+            self.highlighted = index;
         }
     }
 
@@ -118,7 +118,7 @@ impl Field for ChoiceInput {
         field_value
             .map(|s| s.parse::<i64>())
             .and_then(|d| d.ok())
-            .map(|n| FieldValue::Int(n))
+            .map(FieldValue::Int)
             .unwrap_or(FieldValue::Text(
                 field_value.cloned().unwrap_or("".to_string()),
             ))
@@ -168,7 +168,7 @@ impl Field for ChoiceInput {
 
     fn validate(&self) -> Result<(), Vec<String>> {
         if self.required && self.selected.is_none() {
-            Err(vec![format!("Field is required")])
+            Err(vec!["Field is required".to_string()])
         } else {
             Ok(())
         }

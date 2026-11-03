@@ -209,6 +209,8 @@ impl From<CliFlowControl> for FlowControl {
 
 #[cfg(test)]
 mod tests {
+    use std::path::Path;
+
     use super::*;
     use clap::Parser;
 
@@ -254,7 +256,7 @@ mod tests {
 
         assert!(matches!(
             source,
-            Some(DataSource::File(FileConfig { path })) if path == PathBuf::from("track.nmea")
+            Some(DataSource::File(FileConfig { path })) if path == Path::new("track.nmea")
         ));
     }
 

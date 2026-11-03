@@ -217,9 +217,9 @@ impl<'a> Skyplot<'a> {
             return None;
         }
 
-        // Calculate the size of a terminal cell
-        let cell_width = 2.0 / plot_area.x as f64;
-        let cell_height = 2.0 / plot_area.y as f64;
+        // Calculate the size of a terminal cell in Canvas units
+        let cell_width = 2.0 / plot_area.width as f64;
+        let cell_height = 2.0 / plot_area.height as f64;
 
         // Define a detection radius based on the distance from the cell's center to a vertex of the
         // cell, with a margin for a more relaxed feeling while hovering

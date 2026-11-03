@@ -157,7 +157,7 @@ impl Field for TextInput {
         let mut errors = Vec::new();
 
         if self.required && self.input.is_empty() {
-            errors.push(format!("Field is required"));
+            errors.push("Field is required".to_string());
         }
 
         for validator in &self.validators {

@@ -51,7 +51,7 @@ impl App {
 }
 
 fn render_tabs_title(app: &App, frame: &mut Frame, area: Rect) {
-    let app_name = format! {"{} {}", crate_name!(), crate_version!()};
+    let app_name = format!("{} {}", crate_name!(), crate_version!());
 
     let layout = Layout::horizontal([
         Constraint::Fill(1),
@@ -121,7 +121,7 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
             "Longitude: {}",
             nmea_data
                 .longitude()
-                .map_or("-".to_string(), |lon| format_longitude(lon))
+                .map_or("-".to_string(), format_longitude)
         )),
         Line::from(format!(
             "Altitude:  {} m (MSL)",
@@ -216,12 +216,7 @@ fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
     let block_raw = Block::bordered().title("Raw data").style(THEME.borders);
     let block_search = Block::bordered().title("Search").style(THEME.borders);
 
-    let logs = Text::from(
-        app.raw_data
-            .iter()
-            .map(|log| Line::from(log))
-            .collect::<Vec<Line>>(),
-    );
+    let logs = Text::from(app.raw_data.iter().map(Line::from).collect::<Vec<Line>>());
 
     let scroll_offset = (app.raw_data.len() as u16).saturating_sub(raw_area.height - 2);
 
@@ -264,7 +259,7 @@ fn render_interactive_setup(app: &mut App, frame: &mut Frame, area: Rect) {
     let layout = Layout::vertical([Constraint::Length(1), Constraint::Fill(1)]);
     let [app_name_area, setup_area] = inner_area.layout(&layout);
 
-    let app_name = format! {"{} {}", crate_name!(), crate_version!()};
+    let app_name = format!("{} {}", crate_name!(), crate_version!());
 
     frame.render_widget(block, area);
     frame.render_widget(Text::from(app_name).bold().centered(), app_name_area);
@@ -370,15 +365,11 @@ impl<'a> From<&App> for SignalsMonitor<'a> {
         let signals = app
             .sv_data
             .iter()
-            .map(|sv| {
-                sv.signals
-                    .iter()
-                    .map(|signal| {
-                        SignalInfo::new(signal.signal, sv.svid, signal.cn0 as u8, signal.is_used)
-                    })
-                    .collect::<Vec<_>>()
+            .flat_map(|sv| {
+                sv.signals.iter().map(|signal| {
+                    SignalInfo::new(signal.signal, sv.svid, signal.cn0 as u8, signal.is_used)
+                })
             })
-            .flatten()
             .collect();
 
         SignalsMonitor::new(signals)

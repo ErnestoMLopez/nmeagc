@@ -192,8 +192,8 @@ impl From<&str> for CliFlowControl {
     fn from(f: &str) -> Self {
         match f {
             "None" => CliFlowControl::None,
-            "Software" => CliFlowControl::Software,
-            "Hardware" => CliFlowControl::Hardware,
+            "SW" => CliFlowControl::Software,
+            "HW" => CliFlowControl::Hardware,
             _ => CliFlowControl::None,
         }
     }

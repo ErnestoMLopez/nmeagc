@@ -34,6 +34,10 @@ pub struct EventHandler {
 
 impl EventHandler {
     /// Constructs a new instance of [`EventHandler`] and spawns a new thread to handle events.
+    #[allow(
+        clippy::new_without_default,
+        reason = "creating an event handler spawns the event thread"
+    )]
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel();
         let tui_handler = EventThread::new(sender.clone());

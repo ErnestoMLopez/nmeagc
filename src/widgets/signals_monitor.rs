@@ -150,11 +150,11 @@ impl<'a> Widget for SignalsMonitor<'a> {
     }
 }
 
-impl<'a> Into<Vec<BarGroup<'a>>> for SignalInfoSet {
-    fn into(self) -> Vec<BarGroup<'a>> {
+impl<'a> From<SignalInfoSet> for Vec<BarGroup<'a>> {
+    fn from(val: SignalInfoSet) -> Self {
         let mut bars_per_sv: BTreeMap<(Gnss, u8), Vec<Bar>> = BTreeMap::new();
 
-        for item in self.0 {
+        for item in val.0 {
             bars_per_sv
                 .entry((Gnss::from(item.signal), item.svid))
                 .or_insert(vec![])

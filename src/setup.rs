@@ -24,6 +24,12 @@ pub struct AppSetup {
     pub output_file: Option<PathBuf>,
 }
 
+impl Default for AppSetup {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl AppSetup {
     const BAUD_RATES: [u32; 10] = [
         1200, 2400, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600,
@@ -359,11 +365,8 @@ impl From<&FormResults> for FileConfig {
     fn from(results: &FormResults) -> Self {
         let mut file_config = FileConfig::default();
         for field_results in results {
-            match field_results.decompose() {
-                ("Path", FieldValue::Text(v)) => {
-                    file_config.path = PathBuf::from(v);
-                }
-                _ => {}
+            if let ("Path", FieldValue::Text(v)) = field_results.decompose() {
+                file_config.path = PathBuf::from(v);
             }
         }
         file_config

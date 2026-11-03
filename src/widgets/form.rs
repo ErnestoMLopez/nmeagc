@@ -21,6 +21,12 @@ pub struct Form {
     validation_errors: Vec<ValidationError>,
 }
 
+impl Default for Form {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Form {
     /// Creates a new [`Form`] with no fields and default style
     pub fn new() -> Self {
@@ -86,11 +92,11 @@ impl Form {
     /// Handles keyboard events
     pub fn handle_key_event(&mut self, key_event: KeyEvent) {
         // If a field is focused we pass the event to it and return if it was used
-        if let FormFocus::Field(index) = self.focus {
-            if let Some(field) = self.fields.get_mut(index) {
-                if field.handle_key_event(&key_event) {
-                    return;
-                }
+        if let FormFocus::Field(index) = self.focus
+            && let Some(field) = self.fields.get_mut(index)
+        {
+            if field.handle_key_event(&key_event) {
+                return;
             }
         }
 
@@ -116,12 +122,6 @@ impl Form {
                 self.focus_previous();
             }
             _ => {}
-        }
-
-        if let FormFocus::Field(index) = self.focus {
-            if let Some(field) = self.fields.get_mut(index) {
-                field.handle_key_event(&key_event);
-            }
         }
 
         // If we reached this point, it means that the form is still/again active. This occurs if we
@@ -187,10 +187,10 @@ impl Form {
             FormFocus::None => FormFocus::Field(0),
         };
 
-        if let FormFocus::Field(index) = self.focus {
-            if let Some(field) = self.fields.get_mut(index) {
-                field.focus(true);
-            }
+        if let FormFocus::Field(index) = self.focus
+            && let Some(field) = self.fields.get_mut(index)
+        {
+            field.focus(true);
         }
     }
 
@@ -213,19 +213,19 @@ impl Form {
             FormFocus::None => FormFocus::SubmitButton,
         };
 
-        if let FormFocus::Field(index) = self.focus {
-            if let Some(field) = self.fields.get_mut(index) {
-                field.focus(true);
-            }
+        if let FormFocus::Field(index) = self.focus
+            && let Some(field) = self.fields.get_mut(index)
+        {
+            field.focus(true);
         }
     }
 
     /// Moves focus to a given field.
     fn focus_field(&mut self, index: usize) {
-        if let FormFocus::Field(index_prev) = self.focus {
-            if let Some(field) = self.fields.get_mut(index_prev) {
-                field.focus(false);
-            }
+        if let FormFocus::Field(index_prev) = self.focus
+            && let Some(field) = self.fields.get_mut(index_prev)
+        {
+            field.focus(false);
         }
 
         if let Some(field) = self.fields.get_mut(index) {

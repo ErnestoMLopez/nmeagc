@@ -92,7 +92,7 @@ impl Field for CheckboxInput {
 
     fn validate(&self) -> Result<(), Vec<String>> {
         if self.required && !self.checked {
-            Err(vec![format!("Field must be checked")])
+            Err(vec!["Field must be checked".to_string()])
         } else {
             Ok(())
         }

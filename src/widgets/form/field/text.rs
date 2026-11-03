@@ -76,14 +76,14 @@ impl TextInput {
 
     /// Moves the cursor to the start of the previous word.
     fn move_cursor_word_left(&mut self) {
-        let chars: Vec<char> = self.input.chars().collect();
-        let mut index = self.cursor.min(chars.len());
+        let prefix = &self.input[..self.cursor_char_index()];
+        let mut index = prefix.chars().count();
+        let mut chars = prefix.chars().rev().peekable();
 
-        while index > 0 && is_word_separator(chars[index - 1]) {
+        while chars.next_if(|&c| is_word_separator(c)).is_some() {
             index -= 1;
         }
-
-        while index > 0 && !is_word_separator(chars[index - 1]) {
+        while chars.next_if(|&c| !is_word_separator(c)).is_some() {
             index -= 1;
         }
 
@@ -92,14 +92,13 @@ impl TextInput {
 
     /// Moves the cursor to the start of the next word.
     fn move_cursor_word_right(&mut self) {
-        let chars: Vec<char> = self.input.chars().collect();
-        let mut index = self.cursor.min(chars.len());
+        let mut index = self.cursor;
+        let mut chars = self.input.chars().skip(self.cursor).peekable();
 
-        while index < chars.len() && !is_word_separator(chars[index]) {
+        while chars.next_if(|&c| !is_word_separator(c)).is_some() {
             index += 1;
         }
-
-        while index < chars.len() && is_word_separator(chars[index]) {
+        while chars.next_if(|&c| is_word_separator(c)).is_some() {
             index += 1;
         }
 
@@ -107,12 +106,7 @@ impl TextInput {
     }
 
     fn enter_char(&mut self, character: char) {
-        let index = self
-            .input
-            .char_indices()
-            .map(|(i, _)| i)
-            .nth(self.cursor)
-            .unwrap_or(self.input.len());
+        let index = self.cursor_char_index();
         self.input.insert(index, character);
         self.move_cursor_right();
     }
@@ -125,6 +119,14 @@ impl TextInput {
             self.input = prev_chars.chain(next_chars).collect();
             self.move_cursor_left();
         }
+    }
+
+    fn cursor_char_index(&self) -> usize {
+        self.input
+            .char_indices()
+            .nth(self.cursor)
+            .map(|(i, _)| i)
+            .unwrap_or(self.input.len())
     }
 }
 

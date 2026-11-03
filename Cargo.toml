@@ -1,6 +1,6 @@
 [package]
 name = "nmeagc"
-version = "0.2.0"
+version = "0.2.1"
 description = "NMEA GNSS data client and visualizer implemented in Rust"
 authors = ["ErnestoMLopez <ernesto.lopez@ing.unlp.edu.ar>"]
 license = "MIT"

@@ -1,13 +1,11 @@
-use crate::widgets::form::field::{Field, FieldValue};
-
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    style::{Modifier, Style},
-    text::Span,
-    widgets::{Widget, WidgetRef},
-};
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::{Modifier, Style};
+use ratatui::text::Span;
+use ratatui::widgets::{Widget, WidgetRef};
+
+use crate::widgets::form::field::{Field, FieldValue};
 
 #[derive(Debug)]
 pub struct CheckboxInput {

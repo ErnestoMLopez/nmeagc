@@ -1,0 +1,6 @@
+# Nightly-only options: format locally with `cargo +nightly fmt`.
+# CI uses stable rustfmt, which ignores these options.
+group_imports = "StdExternalCrate"
+imports_granularity = "Module"
+wrap_comments = true
+comment_width = 100

@@ -1,25 +1,19 @@
+use clap::{crate_name, crate_version};
+use ratatui::Frame;
+use ratatui::layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Offset, Rect};
+use ratatui::style::{Color, Style, Stylize};
+use ratatui::symbols::Marker;
+use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::canvas::{Canvas, Circle, Map, MapResolution, Points, Rectangle};
+use ratatui::widgets::{Block, Borders, Clear, Paragraph, Tabs};
+use strum::IntoEnumIterator;
+
 use crate::app::{App, AppTab};
 use crate::nmea::{RawNmeaLog, RawNmeaStatus};
 use crate::setup::{SetupStep, SourceKind};
 use crate::theme::THEME;
-use crate::widgets::{
-    signals_monitor::{SignalInfo, SignalsMonitor},
-    skyplot::{Skyplot, SkyplotSatellite},
-};
-
-use clap::{crate_name, crate_version};
-use ratatui::{
-    Frame,
-    layout::{Constraint, Direction, HorizontalAlignment, Layout, Margin, Offset, Rect},
-    style::{Color, Style, Stylize},
-    symbols::Marker,
-    text::{Line, Span, Text},
-    widgets::{
-        Block, Borders, Clear, Paragraph, Tabs,
-        canvas::{Canvas, Circle, Map, MapResolution, Points, Rectangle},
-    },
-};
-use strum::IntoEnumIterator;
+use crate::widgets::signals_monitor::{SignalInfo, SignalsMonitor};
+use crate::widgets::skyplot::{Skyplot, SkyplotSatellite};
 
 impl App {
     pub fn render(&mut self, frame: &mut Frame) {

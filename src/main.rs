@@ -1,6 +1,7 @@
 use clap::Parser;
 
-use crate::{app::App, cli::Cli};
+use crate::app::App;
+use crate::cli::Cli;
 
 pub mod app;
 pub mod cli;

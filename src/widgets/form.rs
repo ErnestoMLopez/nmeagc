@@ -1,15 +1,13 @@
 pub mod field;
 
-use self::field::{Field, FieldResult, ValidationError};
-
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    style::Style,
-    text::{Line, Span, Text},
-    widgets::Widget,
-};
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Style;
+use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::Widget;
+
+use self::field::{Field, FieldResult, ValidationError};
 
 pub struct Form {
     fields: Vec<Box<dyn Field>>,
@@ -68,7 +66,8 @@ impl Form {
         self
     }
 
-    /// Sets the style for any highlighted item of the [`Form`] and every [`Field`] added before to it
+    /// Sets the style for any highlighted item of the [`Form`] and every [`Field`] added before to
+    /// it
     pub fn highlight_style(mut self, style: Style) -> Self {
         self.highlight_style = style;
 

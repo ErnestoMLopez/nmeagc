@@ -1,14 +1,14 @@
-use crate::gnss::{GalileoSignal, GlonassSignal, Gnss, GnssSignal, GpsSignal};
-
 use std::collections::{BTreeMap, HashMap};
 
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Layout, Margin, Rect},
-    style::{Color, Style},
-    text::{Line, Text},
-    widgets::{Bar, BarChart, BarGroup, Block, BlockExt, BorderType, Borders, Paragraph, Widget},
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Layout, Margin, Rect};
+use ratatui::style::{Color, Style};
+use ratatui::text::{Line, Text};
+use ratatui::widgets::{
+    Bar, BarChart, BarGroup, Block, BlockExt, BorderType, Borders, Paragraph, Widget,
 };
+
+use crate::gnss::{GalileoSignal, GlonassSignal, Gnss, GnssSignal, GpsSignal};
 
 struct SignalInfoSet(Vec<SignalInfo>);
 

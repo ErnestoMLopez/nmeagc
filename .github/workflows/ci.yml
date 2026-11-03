@@ -25,6 +25,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+      # Import grouping/granularity is applied locally with nightly rustfmt.
+      # CI stays on stable, which ignores those unstable options.
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:

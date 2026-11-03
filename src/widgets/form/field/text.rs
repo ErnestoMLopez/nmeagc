@@ -1,13 +1,12 @@
-use crate::widgets::form::field::{Field, FieldValue, validation::Validator};
-
 use crossterm::event::{KeyCode, KeyEvent};
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Layout, Rect},
-    style::Style,
-    text::{Line, Span},
-    widgets::{Widget, WidgetRef},
-};
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Layout, Rect};
+use ratatui::style::Style;
+use ratatui::text::{Line, Span};
+use ratatui::widgets::{Widget, WidgetRef};
+
+use crate::widgets::form::field::validation::Validator;
+use crate::widgets::form::field::{Field, FieldValue};
 
 pub struct TextInput {
     label: String,

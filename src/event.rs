@@ -1,13 +1,12 @@
-use crate::app::AppEvent;
+use std::sync::mpsc;
+use std::thread;
+use std::time::{Duration, Instant};
 
-use std::{
-    sync::mpsc,
-    thread,
-    time::{Duration, Instant},
-};
-
-use color_eyre::{Result, eyre::WrapErr};
+use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
 use crossterm::event::{self, Event as CrosstermEvent};
+
+use crate::app::AppEvent;
 
 /// Frequency at which tick events are emitted.
 const TICK_FPS: f64 = 30.0;

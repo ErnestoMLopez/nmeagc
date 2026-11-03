@@ -1,33 +1,27 @@
-use crate::cli::{Cli, DataSource};
-use crate::event::{Event, EventHandler};
-use crate::gnss::{NavigationData, SvData};
-use crate::nmea::{RawNmeaLog, run_nmea_handler};
-use crate::setup::{AppSetup, SetupAction};
-
-use std::{
-    fs::File,
-    io::{BufReader, Read},
-    net::TcpStream,
-    path::PathBuf,
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
-    thread::{self, JoinHandle},
-    time::Duration,
-};
+use std::fs::File;
+use std::io::{BufReader, Read};
+use std::net::TcpStream;
+use std::path::PathBuf;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
 
 use circular_buffer::FixedCircularBuffer;
-use color_eyre::{
-    Result,
-    eyre::{Context, eyre},
-};
+use color_eyre::Result;
+use color_eyre::eyre::{Context, eyre};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
 use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
+
+use crate::cli::{Cli, DataSource};
+use crate::event::{Event, EventHandler};
+use crate::gnss::{NavigationData, SvData};
+use crate::nmea::{RawNmeaLog, run_nmea_handler};
+use crate::setup::{AppSetup, SetupAction};
 
 /// Maximum amount of NMEA sentences to store and render in the raw data tab
 const MAX_RAW_NMEA_LOGS: usize = 1000;

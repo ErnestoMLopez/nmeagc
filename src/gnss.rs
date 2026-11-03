@@ -1,7 +1,7 @@
-use crate::nmea::SolutionType;
-
 use chrono::{DateTime, Utc};
 use strum::IntoStaticStr;
+
+use crate::nmea::SolutionType;
 
 #[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Gnss {

@@ -1,11 +1,10 @@
 use std::{io, panic};
 
 use color_eyre::Result;
-use crossterm::{
-    event::{DisableMouseCapture, EnableMouseCapture},
-    terminal::{EnterAlternateScreen, LeaveAlternateScreen},
-};
-use ratatui::{DefaultTerminal, Terminal, backend::CrosstermBackend};
+use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
+use crossterm::terminal::{EnterAlternateScreen, LeaveAlternateScreen};
+use ratatui::backend::CrosstermBackend;
+use ratatui::{DefaultTerminal, Terminal};
 
 /// Initializes the terminal interface.
 ///

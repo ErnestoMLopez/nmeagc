@@ -1,15 +1,13 @@
-use crate::gnss::Gnss;
-
-use ratatui::{
-    buffer::Buffer,
-    layout::{Constraint, Layout, Position, Rect},
-    style::{Color, Style, Stylize},
-    symbols::Marker,
-    widgets::{
-        Block, BlockExt, BorderType, Borders, Cell, Paragraph, Row, Table, Widget, Wrap,
-        canvas::{Canvas, Circle, Context, Line, Painter, Shape},
-    },
+use ratatui::buffer::Buffer;
+use ratatui::layout::{Constraint, Layout, Position, Rect};
+use ratatui::style::{Color, Style, Stylize};
+use ratatui::symbols::Marker;
+use ratatui::widgets::canvas::{Canvas, Circle, Context, Line, Painter, Shape};
+use ratatui::widgets::{
+    Block, BlockExt, BorderType, Borders, Cell, Paragraph, Row, Table, Widget, Wrap,
 };
+
+use crate::gnss::Gnss;
 
 pub struct Skyplot<'a> {
     satellites: Vec<SkyplotSatellite>,

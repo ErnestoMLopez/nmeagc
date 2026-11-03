@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 
-use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum, builder::Styles};
+use clap::builder::Styles;
+use clap::{ArgAction, Args, Parser, Subcommand, ValueEnum};
 use serialport::{DataBits, FlowControl, Parity, StopBits};
 
 #[derive(Parser, Debug)]
@@ -8,7 +9,8 @@ use serialport::{DataBits, FlowControl, Parity, StopBits};
 pub struct Cli {
     /// Execute the client in interactive setup mode
     ///
-    /// Interactive mode allows configuring the source of the NMEA data to setup a reader directly from the TUI.
+    /// Interactive mode allows configuring the source of the NMEA data to setup a reader directly
+    /// from the TUI.
     #[arg(short, long)]
     pub interactive: bool,
 
@@ -211,8 +213,9 @@ impl From<CliFlowControl> for FlowControl {
 mod tests {
     use std::path::Path;
 
-    use super::*;
     use clap::Parser;
+
+    use super::*;
 
     #[test]
     fn help_is_printed_without_arguments() {

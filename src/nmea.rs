@@ -1,17 +1,14 @@
+use std::io::{self, BufRead};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
+
+use color_eyre::Result;
+use color_eyre::eyre::WrapErr;
+use nmea::{Nmea, SentenceType};
+
 use crate::app::{App, AppEvent};
 use crate::event::{Event, EventThread};
 use crate::gnss::{Gnss, GnssSignal, SignalData, SvData};
-
-use std::{
-    io::{self, BufRead},
-    sync::{
-        Arc, Mutex,
-        atomic::{AtomicBool, Ordering},
-    },
-};
-
-use color_eyre::{Result, eyre::WrapErr};
-use nmea::{Nmea, SentenceType};
 
 #[derive(Clone, Debug)]
 pub struct RawNmeaLog {
@@ -86,10 +83,11 @@ impl App {
         let nmea_sv_data = nmea_data.satellites();
         let sv_data = &mut self.sv_data;
 
-        // El llenado de la tabla de datos de satélites y de señales de cada satélite se hace a partir de los datos de
-        // las sentencias GSV, las cuales dan información solamente de los satélites, no de las señales en sí. Esto
-        // parece una copia inútil e ineficiente de información, pero está pensado para que la intefaz a la que acceda
-        // la UI sea lo más genérica posible, y permita su uso en clientes para mensajes propietarios que sí posean
+        // El llenado de la tabla de datos de satélites y de señales de cada satélite se hace a
+        // partir de los datos de las sentencias GSV, las cuales dan información solamente de los
+        // satélites, no de las señales en sí. Esto parece una copia inútil e ineficiente de
+        // información, pero está pensado para que la intefaz a la que acceda la UI sea lo más
+        // genérica posible, y permita su uso en clientes para mensajes propietarios que sí posean
         // información adicional de cada señal.
 
         sv_data.clear();
@@ -195,9 +193,9 @@ pub fn run_nmea_handler<R: BufRead>(
     //             actor.send(Event::App(AppEvent::NmeaMessage(sentence_type)))
     //         }
     //         Err(err) => {
-    //             // Atajamos los casos que nos interesarían, pero como no son soportados por la librería nmea, los
-    //             // marcamos como tales, dejando a todos los demás no categorizados.
-    //             raw_status = match err {
+    //             // Atajamos los casos que nos interesarían, pero como no son soportados por la
+    // librería nmea, los             // marcamos como tales, dejando a todos los demás no
+    // categorizados.             raw_status = match err {
     //                 nmea::Error::Unsupported(SentenceType::GST) => RawNmeaStatus::Unimplemented,
     //                 nmea::Error::Unsupported(_) => RawNmeaStatus::Other,
     //                 _ => RawNmeaStatus::Error,

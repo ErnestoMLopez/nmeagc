@@ -1,19 +1,15 @@
-use crate::{
-    cli::{
-        CliDataBits, CliFlowControl, CliParity, CliStopBits, DataSource, FileConfig, SerialConfig,
-        TcpConfig,
-    },
-    theme::THEME,
-    widgets::form::{
-        Form, FormResults, FormState,
-        field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator},
-    },
-};
-
 use std::path::{Path, PathBuf};
 
 use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+
+use crate::cli::{
+    CliDataBits, CliFlowControl, CliParity, CliStopBits, DataSource, FileConfig, SerialConfig,
+    TcpConfig,
+};
+use crate::theme::THEME;
+use crate::widgets::form::field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator};
+use crate::widgets::form::{Form, FormResults, FormState};
 
 pub struct AppSetup {
     pub step: SetupStep,

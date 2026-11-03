@@ -47,7 +47,7 @@ pub trait Field: WidgetRef + Send + Sync {
     fn is_required(&self) -> bool;
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum FieldValue {
     Bool(bool),
     Int(i64),

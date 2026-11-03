@@ -108,18 +108,10 @@ impl Field for ChoiceInput {
     }
 
     fn value(&self) -> FieldValue {
-        let field_value = self
-            .selected
+        self.selected
             .and_then(|i| self.options.get(i))
-            .map(|(_, display)| display);
-
-        field_value
-            .map(|s| s.parse::<i64>())
-            .and_then(|d| d.ok())
-            .map(FieldValue::Int)
-            .unwrap_or(FieldValue::Text(
-                field_value.cloned().unwrap_or("".to_string()),
-            ))
+            .map(|(value, _)| value.clone())
+            .unwrap_or_else(|| FieldValue::Text(String::new()))
     }
 
     fn style(&mut self, style: Style) {
@@ -243,5 +235,35 @@ impl WidgetRef for ChoiceInput {
 
             StatefulWidget::render(dropdown, dropdown_area, buf, &mut state);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn value_returns_stored_text_instead_of_display_text() {
+        let mut input = ChoiceInput::new("Flow control")
+            .options(vec![(FieldValue::Text("SW".to_string()), "Software")]);
+        input.selected = Some(0);
+
+        assert_eq!(input.value(), FieldValue::Text("SW".to_string()));
+    }
+
+    #[test]
+    fn value_returns_stored_int_instead_of_display_text() {
+        let mut input =
+            ChoiceInput::new("Baud rate").options(vec![(FieldValue::Int(9600), "9600")]);
+        input.selected = Some(0);
+
+        assert_eq!(input.value(), FieldValue::Int(9600));
+    }
+
+    #[test]
+    fn value_is_empty_text_without_selection() {
+        let input = ChoiceInput::new("Empty");
+
+        assert_eq!(input.value(), FieldValue::Text(String::new()));
     }
 }

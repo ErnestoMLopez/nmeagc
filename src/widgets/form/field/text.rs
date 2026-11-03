@@ -1,4 +1,4 @@
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Rect};
 use ratatui::style::Style;
@@ -74,6 +74,38 @@ impl TextInput {
             .clamp(0, self.input.chars().count());
     }
 
+    /// Moves the cursor to the start of the previous word.
+    fn move_cursor_word_left(&mut self) {
+        let chars: Vec<char> = self.input.chars().collect();
+        let mut index = self.cursor.min(chars.len());
+
+        while index > 0 && is_word_separator(chars[index - 1]) {
+            index -= 1;
+        }
+
+        while index > 0 && !is_word_separator(chars[index - 1]) {
+            index -= 1;
+        }
+
+        self.cursor = index;
+    }
+
+    /// Moves the cursor to the start of the next word.
+    fn move_cursor_word_right(&mut self) {
+        let chars: Vec<char> = self.input.chars().collect();
+        let mut index = self.cursor.min(chars.len());
+
+        while index < chars.len() && !is_word_separator(chars[index]) {
+            index += 1;
+        }
+
+        while index < chars.len() && is_word_separator(chars[index]) {
+            index += 1;
+        }
+
+        self.cursor = index;
+    }
+
     fn enter_char(&mut self, character: char) {
         let index = self
             .input
@@ -115,6 +147,7 @@ impl Field for TextInput {
 
     fn handle_key_event(&mut self, event: &KeyEvent) -> bool {
         match event.code {
+            KeyCode::Char(_) if event.modifiers == KeyModifiers::CONTROL => false,
             KeyCode::Char(c) => {
                 self.enter_char(c);
                 true
@@ -128,8 +161,16 @@ impl Field for TextInput {
                 self.delete_char();
                 true
             }
+            KeyCode::Left if event.modifiers == KeyModifiers::CONTROL => {
+                self.move_cursor_word_left();
+                true
+            }
             KeyCode::Left => {
                 self.move_cursor_left();
+                true
+            }
+            KeyCode::Right if event.modifiers == KeyModifiers::CONTROL => {
+                self.move_cursor_word_right();
                 true
             }
             KeyCode::Right => {
@@ -225,5 +266,81 @@ impl WidgetRef for TextInput {
         };
 
         input.render(input_area, buf);
+    }
+}
+
+fn is_word_separator(character: char) -> bool {
+    character.is_whitespace() || character == '/' || character == '.'
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ctrl_c_is_not_inserted_as_text() {
+        let mut input = TextInput::new("Host");
+
+        let consumed =
+            input.handle_key_event(&KeyEvent::new(KeyCode::Char('c'), KeyModifiers::CONTROL));
+
+        assert!(!consumed);
+        assert_eq!(input.value(), FieldValue::Text(String::new()));
+    }
+
+    #[test]
+    fn plain_char_is_inserted() {
+        let mut input = TextInput::new("Host");
+
+        let consumed =
+            input.handle_key_event(&KeyEvent::new(KeyCode::Char('c'), KeyModifiers::NONE));
+
+        assert!(consumed);
+        assert_eq!(input.value(), FieldValue::Text("c".to_string()));
+    }
+
+    fn input_with_cursor_at_end(value: &str) -> TextInput {
+        let mut input = TextInput::new("Path").with_input(value);
+        input.handle_key_event(&KeyEvent::new(KeyCode::End, KeyModifiers::NONE));
+        input
+    }
+
+    #[test]
+    fn ctrl_left_jumps_to_previous_word_boundary() {
+        let mut input = input_with_cursor_at_end("foo bar/baz.rs");
+
+        let consumed = input.handle_key_event(&KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL));
+
+        assert!(consumed);
+        assert_eq!(input.cursor, 12);
+
+        input.handle_key_event(&KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL));
+        assert_eq!(input.cursor, 8);
+
+        input.handle_key_event(&KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL));
+        assert_eq!(input.cursor, 4);
+
+        input.handle_key_event(&KeyEvent::new(KeyCode::Left, KeyModifiers::CONTROL));
+        assert_eq!(input.cursor, 0);
+    }
+
+    #[test]
+    fn ctrl_right_jumps_to_next_word_boundary() {
+        let mut input = TextInput::new("Path").with_input("foo bar/baz.rs");
+
+        let consumed =
+            input.handle_key_event(&KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL));
+
+        assert!(consumed);
+        assert_eq!(input.cursor, 4);
+
+        input.handle_key_event(&KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL));
+        assert_eq!(input.cursor, 8);
+
+        input.handle_key_event(&KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL));
+        assert_eq!(input.cursor, 12);
+
+        input.handle_key_event(&KeyEvent::new(KeyCode::Right, KeyModifiers::CONTROL));
+        assert_eq!(input.cursor, 14);
     }
 }

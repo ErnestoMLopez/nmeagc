@@ -397,3 +397,14 @@ impl<'a> IntoIterator for &'a FormResults {
         self.0.iter()
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    impl FormResults {
+        pub(crate) fn from_results(results: Vec<FieldResult>) -> Self {
+            Self(results)
+        }
+    }
+}

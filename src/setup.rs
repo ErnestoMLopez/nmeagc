@@ -1,7 +1,7 @@
 use std::path::{Path, PathBuf};
 
 use color_eyre::eyre::Error;
-use crossterm::event::{KeyCode, KeyEvent, KeyEventKind};
+use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
 
 use crate::cli::{
     CliDataBits, CliFlowControl, CliParity, CliStopBits, DataSource, FileConfig, SerialConfig,
@@ -48,7 +48,9 @@ impl AppSetup {
             return Ok(SetupAction::Continue);
         }
 
-        if let KeyCode::Esc = key_event.code {
+        if matches!(key_event.code, KeyCode::Char('c' | 'C') if key_event.modifiers == KeyModifiers::CONTROL)
+            || matches!(key_event.code, KeyCode::Esc)
+        {
             return Ok(SetupAction::Cancel);
         }
 
@@ -394,5 +396,74 @@ impl Validator for NumericString {
                 .map(|_| ())
                 .map_err(|_| "Value is not a valid number".to_string())
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::widgets::form::field::FieldResult;
+
+    fn press(code: KeyCode) -> KeyEvent {
+        KeyEvent::new(code, KeyModifiers::NONE)
+    }
+
+    fn press_with(code: KeyCode, modifiers: KeyModifiers) -> KeyEvent {
+        KeyEvent::new(code, modifiers)
+    }
+
+    #[test]
+    fn esc_cancels_from_io_config() {
+        let mut setup = AppSetup::new();
+
+        let action = setup.handle_key_event(press(KeyCode::Esc)).unwrap();
+
+        assert!(matches!(action, SetupAction::Cancel));
+    }
+
+    #[test]
+    fn esc_cancels_from_source_config() {
+        let mut setup = AppSetup::new();
+        setup.step = SetupStep::SourceConfig(SourceKind::Tcp);
+
+        let action = setup.handle_key_event(press(KeyCode::Esc)).unwrap();
+
+        assert!(matches!(action, SetupAction::Cancel));
+    }
+
+    #[test]
+    fn ctrl_c_cancels_setup() {
+        let mut setup = AppSetup::new();
+
+        let action = setup
+            .handle_key_event(press_with(KeyCode::Char('c'), KeyModifiers::CONTROL))
+            .unwrap();
+
+        assert!(matches!(action, SetupAction::Cancel));
+    }
+
+    fn serial_config_with_flow_control(value: &str) -> SerialConfig {
+        let results = FormResults::from_results(vec![FieldResult::new(
+            "Flow control",
+            FieldValue::Text(value.to_string()),
+        )]);
+
+        SerialConfig::from(&results)
+    }
+
+    #[test]
+    fn serial_config_maps_flow_control_values() {
+        assert!(matches!(
+            serial_config_with_flow_control("None").flow_control,
+            CliFlowControl::None
+        ));
+        assert!(matches!(
+            serial_config_with_flow_control("SW").flow_control,
+            CliFlowControl::Software
+        ));
+        assert!(matches!(
+            serial_config_with_flow_control("HW").flow_control,
+            CliFlowControl::Hardware
+        ));
     }
 }

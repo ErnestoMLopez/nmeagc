@@ -1,4 +1,6 @@
-use crate::widgets::field::{Field, FieldResult, ValidationError};
+pub mod field;
+
+use self::field::{Field, FieldResult, ValidationError};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{

@@ -4,9 +4,9 @@ use crate::{
         TcpConfig,
     },
     theme::THEME,
-    widgets::{
+    widgets::form::{
+        Form, FormResults, FormState,
         field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator},
-        form::{Form, FormResults, FormState},
     },
 };
 

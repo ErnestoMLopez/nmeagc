@@ -1,4 +1,4 @@
-use crate::widgets::field::{Field, FieldValue};
+use crate::widgets::form::field::{Field, FieldValue};
 
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::{

@@ -291,12 +291,13 @@ impl Form {
 
 impl Widget for &Form {
     fn render(self, area: Rect, buf: &mut Buffer) {
-        // Layout for fields, validation error message and cancel and submit buttons
-        let mut constraints = Vec::with_capacity(self.fields.len() + 5);
+        let field_count = self.fields.len();
 
-        for field in &self.fields {
-            constraints.push(Constraint::Length(field.height()));
-        }
+        // Fields always occupy one row each. A field taller than one row (e.g. an open dropdown) is
+        // rendered over the following fields, which are skipped for as long as they are covered,
+        // instead of pushing them down.
+        let mut constraints = Vec::with_capacity(field_count + 5);
+        constraints.extend(std::iter::repeat_n(Constraint::Length(1), field_count));
         constraints.push(Constraint::Fill(1));
         constraints.push(Constraint::Length(2));
         constraints.extend([Constraint::Length(1); 2]);
@@ -304,8 +305,25 @@ impl Widget for &Form {
 
         let areas = Layout::vertical(constraints).split(area);
 
+        // Stop overlays of open dropdowns before the validation error and button rows.
+        let overlay_bottom = areas
+            .get(field_count + 1)
+            .map_or(area.bottom(), |error_area| error_area.y);
+
+        let mut hidden_until = 0;
+
         for (i, field) in self.fields.iter().enumerate() {
-            field.render_ref(areas[i], buf);
+            if i < hidden_until {
+                continue;
+            }
+
+            let height = field
+                .height()
+                .min(overlay_bottom.saturating_sub(areas[i].y));
+            let field_area = Rect { height, ..areas[i] };
+
+            field.render_ref(field_area, buf);
+            hidden_until = i + height as usize;
         }
 
         // Render submit button

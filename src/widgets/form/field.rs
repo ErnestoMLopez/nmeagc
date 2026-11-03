@@ -3,12 +3,11 @@ mod choice;
 mod text;
 mod validation;
 
+pub use checkbox::CheckboxInput;
+pub use choice::ChoiceInput;
 use crossterm::event::KeyEvent;
 use ratatui::style::Style;
 use ratatui::widgets::WidgetRef;
-
-pub use checkbox::CheckboxInput;
-pub use choice::ChoiceInput;
 pub use text::TextInput;
 pub use validation::{ValidationError, Validator};
 
@@ -38,8 +37,8 @@ pub trait Field: WidgetRef + Send + Sync {
 
     /// Returns the height needed to render this field.
     ///
-    /// Normally this is 1, but some fields can have variable height, such as a dropdown that is
-    /// opened and hides the following fields.
+    /// Normally this is 1, but some fields can have variable height, such as a
+    /// dropdown that covers and skips the fields rendered below it while open.
     fn height(&self) -> u16 {
         1
     }

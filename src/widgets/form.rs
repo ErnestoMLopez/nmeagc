@@ -92,12 +92,10 @@ impl Form {
     /// Handles keyboard events
     pub fn handle_key_event(&mut self, key_event: KeyEvent) {
         // If a field is focused we pass the event to it and return if it was used
-        if let FormFocus::Field(index) = self.focus
-            && let Some(field) = self.fields.get_mut(index)
+        if let Some(field) = self.focused_field()
+            && field.handle_key_event(&key_event)
         {
-            if field.handle_key_event(&key_event) {
-                return;
-            }
+            return;
         }
 
         match key_event.code {
@@ -170,12 +168,12 @@ impl Form {
 
     /// Moves focus to the next field or button.
     fn focus_next(&mut self) {
+        if let Some(field) = self.focused_field() {
+            field.focus(false);
+        }
+
         self.focus = match self.focus {
             FormFocus::Field(index) => {
-                if let Some(field) = self.fields.get_mut(index) {
-                    field.focus(false);
-                }
-
                 if index < self.fields.len() - 1 {
                     FormFocus::Field(index + 1)
                 } else {
@@ -187,21 +185,19 @@ impl Form {
             FormFocus::None => FormFocus::Field(0),
         };
 
-        if let FormFocus::Field(index) = self.focus
-            && let Some(field) = self.fields.get_mut(index)
-        {
+        if let Some(field) = self.focused_field() {
             field.focus(true);
         }
     }
 
     /// Moves focus to the previous field or button.
     fn focus_previous(&mut self) {
+        if let Some(field) = self.focused_field() {
+            field.focus(false);
+        }
+
         self.focus = match self.focus {
             FormFocus::Field(index) => {
-                if let Some(field) = self.fields.get_mut(index) {
-                    field.focus(false);
-                }
-
                 if index > 0 {
                     FormFocus::Field(index - 1)
                 } else {
@@ -213,24 +209,28 @@ impl Form {
             FormFocus::None => FormFocus::SubmitButton,
         };
 
-        if let FormFocus::Field(index) = self.focus
-            && let Some(field) = self.fields.get_mut(index)
-        {
+        if let Some(field) = self.focused_field() {
             field.focus(true);
         }
     }
 
     /// Moves focus to a given field.
     fn focus_field(&mut self, index: usize) {
-        if let FormFocus::Field(index_prev) = self.focus
-            && let Some(field) = self.fields.get_mut(index_prev)
-        {
+        if let Some(field) = self.focused_field() {
             field.focus(false);
         }
 
         if let Some(field) = self.fields.get_mut(index) {
             self.focus = FormFocus::Field(index);
             field.focus(true);
+        }
+    }
+
+    /// Returns the currently focused field, if any.
+    fn focused_field(&mut self) -> Option<&mut Box<dyn Field>> {
+        match self.focus {
+            FormFocus::Field(index) => self.fields.get_mut(index),
+            _ => None,
         }
     }
 

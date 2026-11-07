@@ -140,7 +140,7 @@ impl App {
             self.handle_events()?;
         }
 
-        Ok(())
+        self.terminate()
     }
 
     /// Handles all the events emitted by the event handler.
@@ -245,7 +245,10 @@ impl App {
     /// Set running to false to quit the application and wait for each spawned thread.
     fn quit(&mut self) -> Result<()> {
         self.running.store(false, Ordering::Relaxed);
+        Ok(())
+    }
 
+    fn terminate(&mut self) -> Result<()> {
         if let Some(writer) = self.output_writer.as_mut() {
             writer.flush().wrap_err("Error flushing output file")?;
         }

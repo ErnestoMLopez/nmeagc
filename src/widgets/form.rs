@@ -237,11 +237,7 @@ impl Form {
     }
 
     fn render_cancel_button(&self, area: Rect, buf: &mut Buffer) {
-        let buttom_text = if let Some(ref label) = self.cancel_button {
-            label
-        } else {
-            "Cancel"
-        };
+        let buttom_text = self.cancel_button.as_deref().unwrap_or("Cancel");
 
         let (delimiters, button_style) = if self.focus == FormFocus::CancelButton {
             (["[ ", " ]"], self.buttons_style.reversed())
@@ -263,11 +259,7 @@ impl Form {
     }
 
     fn render_submit_button(&self, area: Rect, buf: &mut Buffer) {
-        let buttom_text = if let Some(ref label) = self.submit_button {
-            label
-        } else {
-            "Submit"
-        };
+        let buttom_text = self.submit_button.as_deref().unwrap_or("Submit");
 
         let (delimiters, button_style) = if self.focus == FormFocus::SubmitButton {
             (["[ ", " ]"], self.buttons_style.reversed())

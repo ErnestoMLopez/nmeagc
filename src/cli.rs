@@ -14,11 +14,11 @@ pub struct Cli {
     #[arg(short, long)]
     pub interactive: bool,
 
-    /// Write received messages to the specified output file
-    #[arg(short, long)]
+    /// Specify an output file to which the received NMEA data will be written.
+    #[arg(short, long, global = true)]
     pub output: Option<PathBuf>,
 
-    /// Specifies the source and configuration of the NMEA data.
+    /// Select the source and configuration of the NMEA data.
     #[command(subcommand)]
     pub source: Option<DataSource>,
 

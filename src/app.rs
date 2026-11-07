@@ -1,5 +1,5 @@
 use std::fs::File;
-use std::io::{BufReader, Read};
+use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::TcpStream;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -52,6 +52,8 @@ pub struct App {
     input_source: DataSource,
     /// Output file to write validated received messages
     output_file: Option<PathBuf>,
+    /// Writer for the output file
+    output_writer: Option<BufWriter<File>>,
     /// Handles of each spawned thread for graceful shutdown
     threads: Vec<JoinHandle<Result<()>>>,
 }
@@ -71,7 +73,8 @@ impl App {
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
             input_source: args.source.unwrap_or_default(),
-            output_file: None,
+            output_file: args.output,
+            output_writer: None,
             threads: Vec::new(),
         };
 
@@ -112,6 +115,11 @@ impl App {
                 Box::new(File::open(&config.path).wrap_err("Error opening file")?)
             }
         };
+
+        if let Some(output) = self.output_file.as_ref() {
+            let output_file = File::create(output).wrap_err("Error creating output file")?;
+            self.output_writer = Some(BufWriter::new(output_file));
+        }
 
         let reader = BufReader::new(input);
         let handler = self.event_handler.create_actor();
@@ -223,6 +231,10 @@ impl App {
     }
 
     fn handle_raw_nmea(&mut self, raw: RawNmeaLog) -> Result<()> {
+        if let Some(writer) = self.output_writer.as_mut() {
+            writeln!(writer, "{}", raw.sentence.as_str())
+                .wrap_err("Error writing to output file")?;
+        }
         self.raw_data.push_back(raw);
         Ok(())
     }
@@ -233,6 +245,10 @@ impl App {
     /// Set running to false to quit the application and wait for each spawned thread.
     fn quit(&mut self) -> Result<()> {
         self.running.store(false, Ordering::Relaxed);
+
+        if let Some(writer) = self.output_writer.as_mut() {
+            writer.flush().wrap_err("Error flushing output file")?;
+        }
 
         for handle in self.threads.drain(..) {
             match handle.join() {

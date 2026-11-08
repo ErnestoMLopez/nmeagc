@@ -17,7 +17,7 @@ use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
 
 use crate::cli::{Cli, DataSource};
-use crate::event::{Event, EventHandler, run_tui_handler};
+use crate::event::{Event, EventHandler, EventThread, run_tui_handler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
 use crate::setup::{AppSetup, SetupAction};
@@ -54,9 +54,9 @@ pub struct App {
     /// Writer for the output file
     output_writer: Option<BufWriter<File>>,
     /// Handles of each spawned thread for graceful shutdown
-    threads: Vec<JoinHandle<Result<()>>>,
+    workers: Vec<JoinHandle<Result<()>>>,
     /// First fatal error reported by a worker thread
-    fatal_error: Option<Report>,
+    worker_error: Option<Report>,
 }
 
 impl App {
@@ -76,8 +76,8 @@ impl App {
             input_source: args.source.unwrap_or_default(),
             output_file: args.output,
             output_writer: None,
-            threads: Vec::new(),
-            fatal_error: None,
+            workers: Vec::new(),
+            worker_error: None,
         };
 
         // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
@@ -140,23 +140,12 @@ impl App {
         }
 
         let reader = BufReader::new(input);
-        let actor = self.event_handler.create_actor();
-        let error_actor = actor.clone();
         let parser = Arc::clone(&self.nmea_data);
         let running = Arc::clone(&self.running);
 
-        let handle = thread::spawn(move || {
-            let result = run_nmea_handler(actor, reader, parser, running);
-            if let Err(error) = &result {
-                error_actor.send(Event::WorkerError {
-                    worker: "NMEA reader",
-                    error: format!("{error:#}"),
-                });
-            }
-            result
+        self.spawn_worker("NMEA reader", move |actor| {
+            run_nmea_handler(actor, reader, parser, running)
         });
-
-        self.threads.push(handle);
 
         Ok(())
     }
@@ -165,7 +154,7 @@ impl App {
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         self.start();
 
-        let result: Result<()> = (|| {
+        let loop_result: Result<()> = (|| {
             while self.running.load(Ordering::Relaxed) {
                 terminal.draw(|frame| self.render(frame))?;
                 self.handle_events()?;
@@ -175,10 +164,10 @@ impl App {
 
         let shutdown_result = self.shutdown();
 
-        match self.fatal_error.take() {
-            Some(error) => Err(error),
-            None => result.and(shutdown_result),
-        }
+        self.worker_error
+            .take()
+            .map_or(loop_result, Err)
+            .and(shutdown_result)
     }
 
     /// Handles all the events emitted by the event handler.
@@ -197,7 +186,7 @@ impl App {
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
             Event::WorkerError { worker, error } => {
-                self.fatal_error
+                self.worker_error
                     .get_or_insert_with(|| eyre!("{worker} failed: {error}"));
                 self.quit()?;
             }
@@ -291,23 +280,33 @@ impl App {
         Ok(())
     }
 
-    fn start(&mut self) {
+    /// Spawns a worker thread that reports its error through the event channel.
+    fn spawn_worker<F>(&mut self, name: &'static str, worker: F)
+    where
+        F: FnOnce(EventThread) -> Result<()> + Send + 'static,
+    {
         let actor = self.event_handler.create_actor();
         let error_actor = actor.clone();
-        let running = Arc::clone(&self.running);
 
         let handle = thread::spawn(move || {
-            let result = run_tui_handler(actor, running);
+            let result = worker(actor);
             if let Err(error) = &result {
                 error_actor.send(Event::WorkerError {
-                    worker: "event handler",
+                    worker: name,
                     error: format!("{error:#}"),
                 });
             }
             result
         });
 
-        self.threads.push(handle);
+        self.workers.push(handle);
+    }
+
+    fn start(&mut self) {
+        let running = Arc::clone(&self.running);
+        self.spawn_worker("event handler", move |actor| {
+            run_tui_handler(actor, running)
+        });
     }
 
     fn shutdown(&mut self) -> Result<()> {
@@ -321,7 +320,7 @@ impl App {
             first_error = Some(error);
         }
 
-        for handle in self.threads.drain(..) {
+        for handle in self.workers.drain(..) {
             match handle.join() {
                 Err(_) => {
                     first_error.get_or_insert_with(|| eyre!("Worker thread panicked"));
@@ -463,8 +462,8 @@ mod tests {
         fs::remove_file(&output).ok();
         let mut app = app_with_paths(&input, &output);
 
-        app.threads.push(thread::spawn(|| Ok(())));
-        app.threads
+        app.workers.push(thread::spawn(|| Ok(())));
+        app.workers
             .push(thread::spawn(|| -> Result<()> { Err(eyre!("boom")) }));
 
         let error = app.shutdown().unwrap_err();

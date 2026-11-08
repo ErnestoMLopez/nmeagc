@@ -21,7 +21,7 @@ impl App {
         frame.render_widget(screen, frame.area());
 
         if self.interactive_setup {
-            let interactive_setup_area = centered_rect(60, 50, frame.area());
+            let interactive_setup_area = centered_rect(60, 75, frame.area());
             render_interactive_setup(self, frame, interactive_setup_area);
             return;
         }
@@ -388,4 +388,52 @@ fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
             Constraint::Percentage((100 - percent_x) / 2),
         ])
         .split(vertical[1])[1]
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::Parser;
+    use ratatui::Terminal;
+    use ratatui::backend::TestBackend;
+
+    use super::*;
+    use crate::cli::Cli;
+
+    fn render_serial_setup(width: u16, height: u16) -> String {
+        let args = Cli::try_parse_from(["nmeagc", "-i"]).unwrap();
+        let mut app = App::new(args);
+        app.setup.step = SetupStep::SourceConfig(SourceKind::Serial);
+
+        let mut terminal = Terminal::new(TestBackend::new(width, height)).unwrap();
+        terminal.draw(|frame| app.render(frame)).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        (0..buffer.area.height)
+            .map(|y| {
+                (0..buffer.area.width)
+                    .map(|x| buffer[(x, y)].symbol())
+                    .collect::<String>()
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
+    #[test]
+    fn serial_setup_fits_in_standard_terminal() {
+        let screen = render_serial_setup(80, 24);
+
+        for text in [
+            "Path*:",
+            "Baud rate*:",
+            "Data bits*:",
+            "Parity*:",
+            "Stop bits*:",
+            "Flow control*:",
+            "Timeout [ms]:",
+            "Exclusive access",
+            "Finish",
+        ] {
+            assert!(screen.contains(text), "missing {text} in serial setup");
+        }
+    }
 }

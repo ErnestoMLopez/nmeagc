@@ -297,7 +297,11 @@ impl TryFrom<&FormResults> for PathBuf {
     fn try_from(results: &FormResults) -> Result<Self, Self::Error> {
         for field_results in results {
             if let ("Output file", FieldValue::Text(v)) = field_results.decompose() {
-                return Ok(v.into());
+                if v.trim().is_empty() {
+                    return Err(());
+                } else {
+                    return Ok(v.into());
+                }
             }
         }
         Err(())
@@ -465,5 +469,28 @@ mod tests {
             serial_config_with_flow_control("HW").flow_control,
             CliFlowControl::Hardware
         ));
+    }
+
+    fn output_path_from(value: &str) -> Option<PathBuf> {
+        let results = FormResults::from_results(vec![FieldResult::new(
+            "Output file",
+            FieldValue::Text(value.to_string()),
+        )]);
+
+        PathBuf::try_from(&results).ok()
+    }
+
+    #[test]
+    fn empty_output_file_is_treated_as_not_provided() {
+        assert_eq!(output_path_from(""), None);
+        assert_eq!(output_path_from("   "), None);
+    }
+
+    #[test]
+    fn non_empty_output_file_is_preserved() {
+        assert_eq!(
+            output_path_from("track.nmea"),
+            Some(PathBuf::from("track.nmea"))
+        );
     }
 }

@@ -93,6 +93,17 @@ impl App {
     /// parsing and event generation is done in a thread loop. If an output file is specified, it
     /// will be opened and the validated NMEA sentences will be written to it.
     pub fn setup(&mut self) -> Result<()> {
+        if let (DataSource::File(config), Some(output)) =
+            (&self.input_source, self.output_file.as_ref())
+            && let (Ok(input), Ok(output)) = (config.path.canonicalize(), output.canonicalize())
+            && input == output
+        {
+            return Err(eyre!(
+                "Input and output files must be different: {}",
+                input.display()
+            ));
+        }
+
         let input: Box<dyn Read + Send> = match &self.input_source {
             DataSource::Tcp(config) => {
                 let address = (&*config.host, config.port);
@@ -326,5 +337,61 @@ impl AppTab {
             Self::Map => "   Map   ",
             Self::Raw => "   Raw   ",
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::fs;
+    use std::path::{Path, PathBuf};
+
+    use clap::Parser;
+
+    use super::*;
+
+    fn temp_path(name: &str) -> PathBuf {
+        std::env::temp_dir().join(format!("nmeagc-{}-{name}", std::process::id()))
+    }
+
+    fn app_with_paths(input: &Path, output: &Path) -> App {
+        let args = Cli::try_parse_from([
+            "nmeagc",
+            "-f",
+            input.to_str().unwrap(),
+            "-o",
+            output.to_str().unwrap(),
+        ])
+        .unwrap();
+
+        App::new(args)
+    }
+
+    #[test]
+    fn setup_rejects_same_input_and_output_path() {
+        let path = temp_path("same.nmea");
+        fs::write(&path, b"data").unwrap();
+        let mut app = app_with_paths(&path, &path);
+
+        assert!(app.setup().is_err());
+        assert_eq!(fs::read(&path).unwrap(), b"data");
+
+        fs::remove_file(&path).ok();
+    }
+
+    #[test]
+    fn setup_accepts_different_input_and_output_paths() {
+        let input = temp_path("input.nmea");
+        let output = temp_path("output.nmea");
+        fs::write(&input, b"data").unwrap();
+        fs::remove_file(&output).ok();
+        let mut app = app_with_paths(&input, &output);
+
+        assert!(app.setup().is_ok());
+        assert_eq!(fs::read(&input).unwrap(), b"data");
+        assert!(output.exists());
+        app.terminate().unwrap();
+
+        fs::remove_file(&input).ok();
+        fs::remove_file(&output).ok();
     }
 }

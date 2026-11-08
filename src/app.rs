@@ -17,7 +17,7 @@ use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
 
 use crate::cli::{Cli, DataSource};
-use crate::event::{Event, EventHandler};
+use crate::event::{Event, EventHandler, run_tui_handler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
 use crate::setup::{AppSetup, SetupAction};
@@ -137,11 +137,11 @@ impl App {
         }
 
         let reader = BufReader::new(input);
-        let handler = self.event_handler.create_actor();
+        let actor = self.event_handler.create_actor();
         let parser = Arc::clone(&self.nmea_data);
         let running = Arc::clone(&self.running);
 
-        let handle = thread::spawn(move || run_nmea_handler(handler, reader, parser, running));
+        let handle = thread::spawn(move || run_nmea_handler(actor, reader, parser, running));
 
         self.threads.push(handle);
 
@@ -150,6 +150,8 @@ impl App {
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
+        self.start()?;
+
         while self.running.load(Ordering::Relaxed) {
             terminal.draw(|frame| self.render(frame))?;
             self.handle_events()?;
@@ -263,7 +265,20 @@ impl App {
         Ok(())
     }
 
+    fn start(&mut self) -> Result<()> {
+        let actor = self.event_handler.create_actor();
+        let running = Arc::clone(&self.running);
+
+        let handle = thread::spawn(move || run_tui_handler(actor, running));
+
+        self.threads.push(handle);
+
+        Ok(())
+    }
+
     fn terminate(&mut self) -> Result<()> {
+        self.running.store(false, Ordering::Relaxed);
+
         if let Some(writer) = self.output_writer.as_mut() {
             writer.flush().wrap_err("Error flushing output file")?;
         }

@@ -1,5 +1,5 @@
-use std::sync::mpsc;
-use std::thread;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, mpsc};
 use std::time::{Duration, Instant};
 
 use color_eyre::Result;
@@ -31,16 +31,16 @@ pub struct EventHandler {
     receiver: mpsc::Receiver<Event>,
 }
 
+impl Default for EventHandler {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl EventHandler {
-    /// Constructs a new instance of [`EventHandler`] and spawns a new thread to handle events.
-    #[allow(
-        clippy::new_without_default,
-        reason = "creating an event handler spawns the event thread"
-    )]
+    /// Constructs a new instance of [`EventHandler`].
     pub fn new() -> Self {
         let (sender, receiver) = mpsc::channel();
-        let tui_handler = EventThread::new(sender.clone());
-        thread::spawn(move || run_tui_handler(tui_handler));
         Self { sender, receiver }
     }
 
@@ -54,9 +54,8 @@ impl EventHandler {
     ///
     /// # Errors
     ///
-    /// This function returns an error if the sender channel is disconnected. This can happen if an
-    /// error occurs in the event thread. In practice, this should not happen unless there is a
-    /// problem with the underlying terminal.
+    /// This function returns an error if the sender channel is disconnected. Errors raised by the
+    /// event thread are delivered as [`Event::Error`].
     pub fn next(&self) -> Result<Event> {
         Ok(self.receiver.recv()?)
     }
@@ -91,10 +90,11 @@ impl EventThread {
 /// Runs the terminal events thread.
 ///
 /// This function emits tick events at a fixed rate and polls for crossterm events in between.
-fn run_tui_handler(actor: EventThread) -> Result<()> {
+pub fn run_tui_handler(actor: EventThread, app_running: Arc<AtomicBool>) -> Result<()> {
     let tick_interval = Duration::from_secs_f64(1.0 / TICK_FPS);
     let mut last_tick = Instant::now();
-    loop {
+
+    while app_running.load(Ordering::Relaxed) {
         // Emit tick events at a fixed rate
         let timeout = tick_interval.saturating_sub(last_tick.elapsed());
         if timeout == Duration::ZERO {
@@ -107,4 +107,5 @@ fn run_tui_handler(actor: EventThread) -> Result<()> {
             actor.send(Event::Crossterm(event));
         }
     }
+    Ok(())
 }

@@ -142,9 +142,8 @@ impl App {
 
         let reader = BufReader::new(input);
         let parser = Arc::clone(&self.nmea_data);
-        let running = Arc::clone(&self.running);
 
-        self.spawn_worker("NMEA reader", move |actor| {
+        self.spawn_worker("NMEA reader", move |actor, running| {
             run_nmea_handler(actor, reader, parser, running)
         });
 
@@ -284,13 +283,14 @@ impl App {
     /// Spawns a worker thread that reports its error through the event channel.
     fn spawn_worker<F>(&mut self, name: &'static str, worker: F)
     where
-        F: FnOnce(EventThread) -> Result<()> + Send + 'static,
+        F: FnOnce(EventThread, Arc<AtomicBool>) -> Result<()> + Send + 'static,
     {
         let actor = self.event_handler.create_actor();
         let error_actor = actor.clone();
+        let running = Arc::clone(&self.running);
 
         let handle = thread::spawn(move || {
-            let result = catch_unwind(AssertUnwindSafe(|| worker(actor)))
+            let result = catch_unwind(AssertUnwindSafe(|| worker(actor, running)))
                 .unwrap_or_else(|_| Err(eyre!("panicked")));
             if let Err(error) = &result {
                 error_actor.send(Event::WorkerError {
@@ -305,8 +305,7 @@ impl App {
     }
 
     fn start(&mut self) {
-        let running = Arc::clone(&self.running);
-        self.spawn_worker("event handler", move |actor| {
+        self.spawn_worker("event handler", |actor, running| {
             run_tui_handler(actor, running)
         });
     }
@@ -485,7 +484,7 @@ mod tests {
         fs::remove_file(&output).ok();
         let mut app = app_with_paths(&input, &output);
 
-        app.spawn_worker("boom", |_| panic!("boom"));
+        app.spawn_worker("boom", |_, _| panic!("boom"));
 
         let (worker, error) = loop {
             if let Event::WorkerError { worker, error } = app.event_handler.next().unwrap() {

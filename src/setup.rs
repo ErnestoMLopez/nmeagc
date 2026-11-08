@@ -1,4 +1,5 @@
 use std::path::{Path, PathBuf};
+use std::time::Duration;
 
 use color_eyre::eyre::Error;
 use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
@@ -10,6 +11,9 @@ use crate::cli::{
 use crate::theme::THEME;
 use crate::widgets::form::field::{CheckboxInput, ChoiceInput, FieldValue, TextInput, Validator};
 use crate::widgets::form::{Form, FormResults, FormState};
+
+/// Fallback read timeout for streamed sources when no custom timeout is configured
+const DEFAULT_STREAM_READ_TIMEOUT: Duration = Duration::from_millis(1000);
 
 pub struct AppSetup {
     pub step: SetupStep,
@@ -155,6 +159,7 @@ impl AppSetup {
                     .with_input("23000")
                     .validator(Box::new(NumericString)),
             )
+            .field(TextInput::new("Timeout [ms]").validator(Box::new(NumericString)))
             .cancel_button("Back")
             .submit_button("Finish")
             .style(THEME.popups)
@@ -319,6 +324,9 @@ impl From<&FormResults> for TcpConfig {
                 ("Port", FieldValue::Text(v)) => {
                     tcp_config.port = v.parse::<u16>().unwrap_or_default();
                 }
+                ("Timeout [ms]", FieldValue::Text(v)) => {
+                    tcp_config.timeout = v.parse::<u64>().ok();
+                }
                 _ => {}
             }
         }
@@ -372,6 +380,21 @@ impl From<&FormResults> for FileConfig {
             }
         }
         file_config
+    }
+}
+
+impl TcpConfig {
+    pub fn read_timeout(&self) -> Duration {
+        self.timeout
+            .filter(|&millis| millis > 0)
+            .map_or(DEFAULT_STREAM_READ_TIMEOUT, Duration::from_millis)
+    }
+}
+
+impl SerialConfig {
+    pub fn read_timeout(&self) -> Duration {
+        self.timeout
+            .map_or(DEFAULT_STREAM_READ_TIMEOUT, Duration::from_millis)
     }
 }
 
@@ -469,6 +492,66 @@ mod tests {
             serial_config_with_flow_control("HW").flow_control,
             CliFlowControl::Hardware
         ));
+    }
+
+    fn tcp_config_with_timeout(value: &str) -> TcpConfig {
+        let results = FormResults::from_results(vec![
+            FieldResult::new("Host", FieldValue::Text("127.0.0.1".to_string())),
+            FieldResult::new("Port", FieldValue::Text("23000".to_string())),
+            FieldResult::new("Timeout [ms]", FieldValue::Text(value.to_string())),
+        ]);
+
+        TcpConfig::from(&results)
+    }
+
+    #[test]
+    fn tcp_config_maps_timeout() {
+        assert_eq!(tcp_config_with_timeout("500").timeout, Some(500));
+        assert_eq!(tcp_config_with_timeout("").timeout, None);
+    }
+
+    #[test]
+    fn tcp_read_timeout_falls_back_when_unset_or_zero() {
+        assert_eq!(
+            tcp_config_with_timeout("").read_timeout(),
+            DEFAULT_STREAM_READ_TIMEOUT
+        );
+        assert_eq!(
+            tcp_config_with_timeout("0").read_timeout(),
+            DEFAULT_STREAM_READ_TIMEOUT
+        );
+    }
+
+    #[test]
+    fn tcp_read_timeout_uses_custom_value() {
+        assert_eq!(
+            tcp_config_with_timeout("250").read_timeout(),
+            Duration::from_millis(250)
+        );
+    }
+
+    #[test]
+    fn serial_read_timeout_defaults_and_uses_custom_value() {
+        assert_eq!(
+            SerialConfig::default().read_timeout(),
+            DEFAULT_STREAM_READ_TIMEOUT
+        );
+        assert_eq!(
+            SerialConfig {
+                timeout: Some(0),
+                ..Default::default()
+            }
+            .read_timeout(),
+            Duration::ZERO
+        );
+        assert_eq!(
+            SerialConfig {
+                timeout: Some(250),
+                ..Default::default()
+            }
+            .read_timeout(),
+            Duration::from_millis(250)
+        );
     }
 
     fn output_path_from(value: &str) -> Option<PathBuf> {

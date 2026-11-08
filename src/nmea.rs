@@ -119,15 +119,17 @@ pub fn run_nmea_handler<R: BufRead>(
     parser: Arc<Mutex<Nmea>>,
     app_running: Arc<AtomicBool>,
 ) -> Result<()> {
-    let mut line = String::new();
+    let mut line = Vec::new();
 
     while app_running.load(Ordering::Relaxed) {
-        match reader.read_line(&mut line) {
-            Err(e) if e.kind() == io::ErrorKind::TimedOut => {}
-            Err(e) => return Err(e).wrap_err("Error reading serial port"),
+        match reader.read_until(b'\n', &mut line) {
+            Err(e) if is_read_timeout(&e) => continue,
+            Err(e) => return Err(e).wrap_err("Error reading input source"),
             Ok(0) => return Ok(()),
             _ => {
-                let sentence = line.strip_suffix("\r\n").unwrap_or(line.as_str());
+                let sentence =
+                    std::str::from_utf8(&line).wrap_err("Error decoding NMEA sentence")?;
+                let sentence = sentence.strip_suffix("\r\n").unwrap_or(sentence);
 
                 let mut nmea_parser = parser.lock().expect("mutex poisoned");
 
@@ -212,6 +214,13 @@ pub fn run_nmea_handler<R: BufRead>(
     // }
 
     // Ok(())
+}
+
+fn is_read_timeout(err: &io::Error) -> bool {
+    matches!(
+        err.kind(),
+        io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
+    )
 }
 
 // const TEST_SENTENCES: &[&str] = &[
@@ -303,3 +312,55 @@ pub fn run_nmea_handler<R: BufRead>(
 //     "$GPGSV,3,3,10,31,20,270,39,32,35,150,37*70",
 //     "$GPGLL,3455.1820,S,05757.8100,W,172409.00,A,A*6A",
 // ];
+
+#[cfg(test)]
+mod tests {
+    use std::sync::mpsc;
+    use std::thread;
+    use std::time::Duration;
+
+    use super::*;
+
+    struct TimeoutReader;
+
+    impl io::Read for TimeoutReader {
+        fn read(&mut self, _buf: &mut [u8]) -> io::Result<usize> {
+            Err(io::Error::new(io::ErrorKind::WouldBlock, "timeout"))
+        }
+    }
+
+    impl io::BufRead for TimeoutReader {
+        fn fill_buf(&mut self) -> io::Result<&[u8]> {
+            Err(io::Error::new(io::ErrorKind::WouldBlock, "timeout"))
+        }
+
+        fn consume(&mut self, _amt: usize) {}
+    }
+
+    #[test]
+    fn read_timeouts_are_retryable() {
+        assert!(is_read_timeout(&io::Error::from(io::ErrorKind::TimedOut)));
+        assert!(is_read_timeout(&io::Error::from(io::ErrorKind::WouldBlock)));
+        assert!(!is_read_timeout(&io::Error::from(
+            io::ErrorKind::UnexpectedEof
+        )));
+    }
+
+    #[test]
+    fn handler_exits_after_shutdown_when_reader_times_out() {
+        let (sender, _receiver) = mpsc::channel();
+        let actor = EventThread::new(sender);
+        let parser = Arc::new(Mutex::new(Nmea::default()));
+        let running = Arc::new(AtomicBool::new(true));
+        let worker_running = Arc::clone(&running);
+
+        let handle =
+            thread::spawn(move || run_nmea_handler(actor, TimeoutReader, parser, worker_running));
+
+        thread::sleep(Duration::from_millis(50));
+        running.store(false, Ordering::Relaxed);
+
+        let result = handle.join().expect("worker thread panicked");
+        assert!(result.is_ok());
+    }
+}

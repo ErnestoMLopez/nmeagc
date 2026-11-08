@@ -45,6 +45,7 @@ impl Default for DataSource {
         Self::Tcp(TcpConfig {
             host: "127.0.0.1".to_string(),
             port: 23000,
+            timeout: None,
         })
     }
 }
@@ -57,6 +58,9 @@ pub struct TcpConfig {
     /// Port number for the TCP data source
     #[arg(short, long, default_value_t = 23000)]
     pub port: u16,
+    /// Read timeout in milliseconds
+    #[arg(long)]
+    pub timeout: Option<u64>,
 }
 
 #[derive(Args, Debug, Clone, Default)]
@@ -248,6 +252,35 @@ mod tests {
                 timeout: None,
                 exclusive: None,
             })) if path == "/dev/ttyUSB0"
+        ));
+    }
+
+    #[test]
+    fn parse_tcp_source_with_defaults() {
+        let source = Cli::try_parse_from(["nmeagc", "-t"]).unwrap().source;
+
+        assert!(matches!(
+            source,
+            Some(DataSource::Tcp(TcpConfig {
+                host,
+                port: 23000,
+                timeout: None,
+            })) if host == "127.0.0.1"
+        ));
+    }
+
+    #[test]
+    fn parse_tcp_source_with_timeout() {
+        let source = Cli::try_parse_from(["nmeagc", "-t", "--timeout", "500"])
+            .unwrap()
+            .source;
+
+        assert!(matches!(
+            source,
+            Some(DataSource::Tcp(TcpConfig {
+                timeout: Some(500),
+                ..
+            }))
         ));
     }
 

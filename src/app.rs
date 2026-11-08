@@ -5,7 +5,6 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
 
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
@@ -97,7 +96,11 @@ impl App {
         let input: Box<dyn Read + Send> = match &self.input_source {
             DataSource::Tcp(config) => {
                 let address = (&*config.host, config.port);
-                Box::new(TcpStream::connect(address).wrap_err("Error opening TCP stream")?)
+                let stream = TcpStream::connect(address).wrap_err("Error opening TCP stream")?;
+                stream
+                    .set_read_timeout(Some(config.read_timeout()))
+                    .wrap_err("Error setting TCP read timeout")?;
+                Box::new(stream)
             }
             DataSource::Serial(config) => {
                 let builder = serialport::new(&config.serial_path, config.baudrate)
@@ -105,11 +108,12 @@ impl App {
                     .flow_control(config.flow_control.into())
                     .parity(config.parity.into())
                     .stop_bits(config.stop_bits.into())
-                    .timeout(Duration::from_millis(config.timeout.unwrap_or(1000)));
+                    .timeout(config.read_timeout());
                 // Exclusive access is only available on Unix platforms
                 #[cfg(unix)]
                 let builder = builder.exclusive(config.exclusive.unwrap_or(true));
-                Box::new(builder.open().wrap_err("Error opening serial port")?)
+                let serial_port = builder.open().wrap_err("Error opening serial port")?;
+                Box::new(serial_port)
             }
             DataSource::File(config) => {
                 Box::new(File::open(&config.path).wrap_err("Error opening file")?)

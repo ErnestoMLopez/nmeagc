@@ -212,7 +212,8 @@ fn render_raw_tab(app: &App, frame: &mut Frame, area: Rect) {
 
     let logs = Text::from(app.raw_data.iter().map(Line::from).collect::<Vec<Line>>());
 
-    let scroll_offset = (app.raw_data.len() as u16).saturating_sub(raw_area.height - 2);
+    let scroll_offset =
+        (app.raw_data.len() as u16).saturating_sub(raw_area.height.saturating_sub(2));
 
     let logs_paragraph = Paragraph::new(logs)
         .block(block_raw)

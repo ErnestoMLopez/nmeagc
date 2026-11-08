@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::TcpStream;
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -54,7 +55,7 @@ pub struct App {
     /// Writer for the output file
     output_writer: Option<BufWriter<File>>,
     /// Handles of each spawned thread for graceful shutdown
-    workers: Vec<JoinHandle<Result<()>>>,
+    workers: Vec<(&'static str, JoinHandle<Result<()>>)>,
     /// First fatal error reported by a worker thread
     worker_error: Option<Report>,
 }
@@ -289,7 +290,8 @@ impl App {
         let error_actor = actor.clone();
 
         let handle = thread::spawn(move || {
-            let result = worker(actor);
+            let result = catch_unwind(AssertUnwindSafe(|| worker(actor)))
+                .unwrap_or_else(|_| Err(eyre!("panicked")));
             if let Err(error) = &result {
                 error_actor.send(Event::WorkerError {
                     worker: name,
@@ -299,7 +301,7 @@ impl App {
             result
         });
 
-        self.workers.push(handle);
+        self.workers.push((name, handle));
     }
 
     fn start(&mut self) {
@@ -320,10 +322,10 @@ impl App {
             first_error = Some(error);
         }
 
-        for handle in self.workers.drain(..) {
+        for (name, handle) in self.workers.drain(..) {
             match handle.join() {
                 Err(_) => {
-                    first_error.get_or_insert_with(|| eyre!("Worker thread panicked"));
+                    first_error.get_or_insert_with(|| eyre!("{name} thread panicked"));
                 }
                 Ok(Err(error)) => {
                     first_error.get_or_insert(error);
@@ -462,12 +464,37 @@ mod tests {
         fs::remove_file(&output).ok();
         let mut app = app_with_paths(&input, &output);
 
-        app.workers.push(thread::spawn(|| Ok(())));
-        app.workers
-            .push(thread::spawn(|| -> Result<()> { Err(eyre!("boom")) }));
+        app.workers.push(("ok", thread::spawn(|| Ok(()))));
+        app.workers.push((
+            "boom",
+            thread::spawn(|| -> Result<()> { Err(eyre!("boom")) }),
+        ));
 
         let error = app.shutdown().unwrap_err();
         assert_eq!(error.to_string(), "boom");
+
+        fs::remove_file(&input).ok();
+        fs::remove_file(&output).ok();
+    }
+
+    #[test]
+    fn worker_panic_is_reported() {
+        let input = temp_path("panic-input.nmea");
+        let output = temp_path("panic-output.nmea");
+        fs::write(&input, b"data").unwrap();
+        fs::remove_file(&output).ok();
+        let mut app = app_with_paths(&input, &output);
+
+        app.spawn_worker("boom", |_| panic!("boom"));
+
+        let (worker, error) = loop {
+            if let Event::WorkerError { worker, error } = app.event_handler.next().unwrap() {
+                break (worker, error);
+            }
+        };
+
+        assert_eq!(worker, "boom");
+        assert_eq!(error, "panicked");
 
         fs::remove_file(&input).ok();
         fs::remove_file(&output).ok();

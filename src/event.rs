@@ -20,6 +20,13 @@ pub enum Event {
     Crossterm(CrosstermEvent),
     /// Application events.
     App(AppEvent),
+    /// Error that stopped a worker thread.
+    WorkerError {
+        /// Name of the worker that failed.
+        worker: &'static str,
+        /// Error message.
+        error: String,
+    },
 }
 
 /// Terminal event handler.
@@ -70,6 +77,7 @@ impl EventHandler {
 }
 
 /// A thread that handles reading crossterm events and emitting tick events on a regular schedule.
+#[derive(Clone)]
 pub struct EventThread {
     /// Event sender channel.
     sender: mpsc::Sender<Event>,

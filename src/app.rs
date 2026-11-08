@@ -8,7 +8,7 @@ use std::thread::{self, JoinHandle};
 
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
-use color_eyre::eyre::{Context, eyre};
+use color_eyre::eyre::{Context, Report, eyre};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
@@ -55,6 +55,8 @@ pub struct App {
     output_writer: Option<BufWriter<File>>,
     /// Handles of each spawned thread for graceful shutdown
     threads: Vec<JoinHandle<Result<()>>>,
+    /// First fatal error reported by a worker thread
+    fatal_error: Option<Report>,
 }
 
 impl App {
@@ -75,6 +77,7 @@ impl App {
             output_file: args.output,
             output_writer: None,
             threads: Vec::new(),
+            fatal_error: None,
         };
 
         // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
@@ -138,10 +141,20 @@ impl App {
 
         let reader = BufReader::new(input);
         let actor = self.event_handler.create_actor();
+        let error_actor = actor.clone();
         let parser = Arc::clone(&self.nmea_data);
         let running = Arc::clone(&self.running);
 
-        let handle = thread::spawn(move || run_nmea_handler(actor, reader, parser, running));
+        let handle = thread::spawn(move || {
+            let result = run_nmea_handler(actor, reader, parser, running);
+            if let Err(error) = &result {
+                error_actor.send(Event::WorkerError {
+                    worker: "NMEA reader",
+                    error: format!("{error:#}"),
+                });
+            }
+            result
+        });
 
         self.threads.push(handle);
 
@@ -150,14 +163,22 @@ impl App {
 
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        self.start()?;
+        self.start();
 
-        while self.running.load(Ordering::Relaxed) {
-            terminal.draw(|frame| self.render(frame))?;
-            self.handle_events()?;
+        let result: Result<()> = (|| {
+            while self.running.load(Ordering::Relaxed) {
+                terminal.draw(|frame| self.render(frame))?;
+                self.handle_events()?;
+            }
+            Ok(())
+        })();
+
+        let shutdown_result = self.shutdown();
+
+        match self.fatal_error.take() {
+            Some(error) => Err(error),
+            None => result.and(shutdown_result),
         }
-
-        self.terminate()
     }
 
     /// Handles all the events emitted by the event handler.
@@ -175,6 +196,11 @@ impl App {
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
+            Event::WorkerError { worker, error } => {
+                self.fatal_error
+                    .get_or_insert_with(|| eyre!("{worker} failed: {error}"));
+                self.quit()?;
+            }
         }
         Ok(())
     }
@@ -265,36 +291,49 @@ impl App {
         Ok(())
     }
 
-    fn start(&mut self) -> Result<()> {
+    fn start(&mut self) {
         let actor = self.event_handler.create_actor();
+        let error_actor = actor.clone();
         let running = Arc::clone(&self.running);
 
-        let handle = thread::spawn(move || run_tui_handler(actor, running));
+        let handle = thread::spawn(move || {
+            let result = run_tui_handler(actor, running);
+            if let Err(error) = &result {
+                error_actor.send(Event::WorkerError {
+                    worker: "event handler",
+                    error: format!("{error:#}"),
+                });
+            }
+            result
+        });
 
         self.threads.push(handle);
-
-        Ok(())
     }
 
-    fn terminate(&mut self) -> Result<()> {
+    fn shutdown(&mut self) -> Result<()> {
         self.running.store(false, Ordering::Relaxed);
 
-        if let Some(writer) = self.output_writer.as_mut() {
-            writer.flush().wrap_err("Error flushing output file")?;
+        let mut first_error = None;
+
+        if let Some(mut writer) = self.output_writer.take()
+            && let Err(error) = writer.flush().wrap_err("Error flushing output file")
+        {
+            first_error = Some(error);
         }
 
         for handle in self.threads.drain(..) {
             match handle.join() {
                 Err(_) => {
-                    return Err(eyre!("Error joining working threads"));
+                    first_error.get_or_insert_with(|| eyre!("Worker thread panicked"));
                 }
-                Ok(Err(e)) => {
-                    return Err(e);
+                Ok(Err(error)) => {
+                    first_error.get_or_insert(error);
                 }
-                _ => {}
+                Ok(Ok(())) => {}
             }
         }
-        Ok(())
+
+        first_error.map_or(Ok(()), Err)
     }
 
     /// Returns the key bindings.
@@ -309,6 +348,12 @@ impl App {
             AppTab::Map => vec![],
             AppTab::Raw => vec![],
         }
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        let _ = self.shutdown();
     }
 }
 
@@ -404,7 +449,26 @@ mod tests {
         assert!(app.setup().is_ok());
         assert_eq!(fs::read(&input).unwrap(), b"data");
         assert!(output.exists());
-        app.terminate().unwrap();
+        app.shutdown().unwrap();
+
+        fs::remove_file(&input).ok();
+        fs::remove_file(&output).ok();
+    }
+
+    #[test]
+    fn shutdown_returns_first_worker_error() {
+        let input = temp_path("shutdown-input.nmea");
+        let output = temp_path("shutdown-output.nmea");
+        fs::write(&input, b"data").unwrap();
+        fs::remove_file(&output).ok();
+        let mut app = app_with_paths(&input, &output);
+
+        app.threads.push(thread::spawn(|| Ok(())));
+        app.threads
+            .push(thread::spawn(|| -> Result<()> { Err(eyre!("boom")) }));
+
+        let error = app.shutdown().unwrap_err();
+        assert_eq!(error.to_string(), "boom");
 
         fs::remove_file(&input).ok();
         fs::remove_file(&output).ok();

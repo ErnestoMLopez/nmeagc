@@ -144,7 +144,7 @@ impl App {
         let parser = Arc::clone(&self.nmea_data);
 
         self.spawn_worker("NMEA reader", move |actor, running| {
-            run_nmea_handler(actor, reader, parser, running)
+            run_nmea_handler(actor, running, reader, parser)
         });
 
         Ok(())

@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::TcpStream;
-use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -290,8 +290,8 @@ impl App {
         let running = Arc::clone(&self.running);
 
         let handle = thread::spawn(move || {
-            let result = catch_unwind(AssertUnwindSafe(|| worker(actor, running)))
-                .unwrap_or_else(|_| Err(eyre!("panicked")));
+            let result = panic::catch_unwind(AssertUnwindSafe(|| worker(actor, running)))
+                .unwrap_or_else(|_| Err(eyre!("Thread panicked")));
             if let Err(error) = &result {
                 error_actor.send(Event::WorkerError {
                     worker: name,
@@ -324,7 +324,7 @@ impl App {
         for (name, handle) in self.workers.drain(..) {
             match handle.join() {
                 Err(_) => {
-                    first_error.get_or_insert_with(|| eyre!("{name} thread panicked"));
+                    first_error.get_or_insert_with(|| eyre!("{name} worker panicked"));
                 }
                 Ok(Err(error)) => {
                     first_error.get_or_insert(error);

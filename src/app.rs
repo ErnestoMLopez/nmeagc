@@ -9,7 +9,7 @@ use std::thread::{self, JoinHandle};
 
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
-use color_eyre::eyre::{Context, Report, eyre};
+use color_eyre::eyre::{WrapErr, eyre};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
@@ -56,8 +56,6 @@ pub struct App {
     output_writer: Option<BufWriter<File>>,
     /// Handles of each spawned thread for graceful shutdown
     workers: Vec<(&'static str, JoinHandle<Result<()>>)>,
-    /// First fatal error reported by a worker thread
-    worker_error: Option<Report>,
 }
 
 impl App {
@@ -78,7 +76,6 @@ impl App {
             output_file: args.output,
             output_writer: None,
             workers: Vec::new(),
-            worker_error: None,
         };
 
         // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
@@ -164,10 +161,7 @@ impl App {
 
         let shutdown_result = self.shutdown();
 
-        self.worker_error
-            .take()
-            .map_or(loop_result, Err)
-            .and(shutdown_result)
+        loop_result.and(shutdown_result)
     }
 
     /// Handles all the events emitted by the event handler.
@@ -185,11 +179,7 @@ impl App {
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
-            Event::WorkerError { worker, error } => {
-                self.worker_error
-                    .get_or_insert_with(|| eyre!("{worker} failed: {error}"));
-                self.quit()?;
-            }
+            Event::WorkerError => self.quit()?,
         }
         Ok(())
     }
@@ -280,7 +270,7 @@ impl App {
         Ok(())
     }
 
-    /// Spawns a worker thread that reports its error through the event channel.
+    /// Spawns a worker thread that reports errors/panics through the event channel.
     fn spawn_worker<F>(&mut self, name: &'static str, worker: F)
     where
         F: FnOnce(EventThread, Arc<AtomicBool>) -> Result<()> + Send + 'static,
@@ -292,13 +282,9 @@ impl App {
         let handle = thread::spawn(move || {
             let result = panic::catch_unwind(AssertUnwindSafe(|| worker(actor, running)))
                 .unwrap_or_else(|_| Err(eyre!("Thread panicked")));
-            if let Err(error) = &result {
-                error_actor.send(Event::WorkerError {
-                    worker: name,
-                    error: format!("{error:#}"),
-                });
-            }
             result
+                .inspect_err(|_| error_actor.send(Event::WorkerError))
+                .wrap_err(format!("{} worker failed", name))
         });
 
         self.workers.push((name, handle));
@@ -486,14 +472,15 @@ mod tests {
 
         app.spawn_worker("boom", |_, _| panic!("boom"));
 
-        let (worker, error) = loop {
-            if let Event::WorkerError { worker, error } = app.event_handler.next().unwrap() {
-                break (worker, error);
-            }
-        };
+        // Wait until the worker signals its failure through the event channel. The report itself
+        // is not part of the event: it is carried by the worker handle instead
+        while !matches!(app.event_handler.next().unwrap(), Event::WorkerError) {}
 
-        assert_eq!(worker, "boom");
-        assert_eq!(error, "panicked");
+        // Shutting down joins the worker and surfaces its report, which keeps both the worker
+        // name and the failure cause
+        let error = app.shutdown().unwrap_err();
+        assert_eq!(error.to_string(), "boom worker failed");
+        assert_eq!(error.root_cause().to_string(), "Thread panicked");
 
         fs::remove_file(&input).ok();
         fs::remove_file(&output).ok();

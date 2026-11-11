@@ -20,13 +20,8 @@ pub enum Event {
     Crossterm(CrosstermEvent),
     /// Application events.
     App(AppEvent),
-    /// Error that stopped a worker thread.
-    WorkerError {
-        /// Name of the worker that failed.
-        worker: &'static str,
-        /// Error message.
-        error: String,
-    },
+    /// Event emitted by a worker thread in case of error or panic.
+    WorkerError,
 }
 
 /// Terminal event handler.

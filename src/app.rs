@@ -238,11 +238,12 @@ impl App {
                 // Exclusive access is only available on Unix platforms
                 #[cfg(unix)]
                 let builder = builder.exclusive(config.exclusive.unwrap_or(true));
-                let serial_port = builder.open().wrap_err("Error opening serial port")?;
-                Box::new(serial_port)
+                let port = builder.open().wrap_err("Error opening serial port")?;
+                Box::new(port)
             }
             DataSource::File(config) => {
-                Box::new(File::open(&config.path).wrap_err("Error opening file")?)
+                let file = File::open(&config.path).wrap_err("Error opening file")?;
+                Box::new(file)
             }
         };
 

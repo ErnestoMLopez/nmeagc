@@ -88,65 +88,6 @@ impl App {
         app
     }
 
-    /// Performs the application setup to process NMEA data
-    ///
-    /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
-    /// parsing and event generation is done in a thread loop. If an output file is specified, it
-    /// will be opened and the validated NMEA sentences will be written to it.
-    pub fn setup(&mut self) -> Result<()> {
-        if let (DataSource::File(config), Some(output)) =
-            (&self.input_source, self.output_file.as_ref())
-            && let (Ok(input), Ok(output)) = (config.path.canonicalize(), output.canonicalize())
-            && input == output
-        {
-            return Err(eyre!(
-                "Input and output files must be different: {}",
-                input.display()
-            ));
-        }
-
-        let input: Box<dyn Read + Send> = match &self.input_source {
-            DataSource::Tcp(config) => {
-                let address = (&*config.host, config.port);
-                let stream = TcpStream::connect(address).wrap_err("Error opening TCP stream")?;
-                stream
-                    .set_read_timeout(Some(config.read_timeout()))
-                    .wrap_err("Error setting TCP read timeout")?;
-                Box::new(stream)
-            }
-            DataSource::Serial(config) => {
-                let builder = serialport::new(&config.serial_path, config.baudrate)
-                    .data_bits(config.data_bits.into())
-                    .flow_control(config.flow_control.into())
-                    .parity(config.parity.into())
-                    .stop_bits(config.stop_bits.into())
-                    .timeout(config.read_timeout());
-                // Exclusive access is only available on Unix platforms
-                #[cfg(unix)]
-                let builder = builder.exclusive(config.exclusive.unwrap_or(true));
-                let serial_port = builder.open().wrap_err("Error opening serial port")?;
-                Box::new(serial_port)
-            }
-            DataSource::File(config) => {
-                Box::new(File::open(&config.path).wrap_err("Error opening file")?)
-            }
-        };
-
-        if let Some(output) = self.output_file.as_ref() {
-            let output_file = File::create(output).wrap_err("Error creating output file")?;
-            self.output_writer = Some(BufWriter::new(output_file));
-        }
-
-        let reader = BufReader::new(input);
-        let parser = Arc::clone(&self.nmea_data);
-
-        self.spawn_worker("NMEA reader", move |actor, running| {
-            run_nmea_handler(actor, running, reader, parser)
-        });
-
-        Ok(())
-    }
-
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
         self.start();
@@ -174,12 +115,12 @@ impl App {
                 _ => {}
             },
             Event::App(app_event) => match app_event {
-                AppEvent::Quit => self.quit()?,
+                AppEvent::Quit => self.quit(),
                 AppEvent::SetupReady => self.setup()?,
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
-            Event::WorkerError => self.quit()?,
+            Event::WorkerError => self.quit(),
         }
         Ok(())
     }
@@ -261,33 +202,71 @@ impl App {
         Ok(())
     }
 
+    /// Performs the application setup to process NMEA data
+    ///
+    /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
+    /// parsing and event generation is done in a thread loop. If an output file is specified, it
+    /// will be opened and the validated NMEA sentences will be written to it.
+    fn setup(&mut self) -> Result<()> {
+        if let (DataSource::File(config), Some(output)) =
+            (&self.input_source, self.output_file.as_ref())
+            && let (Ok(input), Ok(output)) = (config.path.canonicalize(), output.canonicalize())
+            && input == output
+        {
+            return Err(eyre!(
+                "Input and output files must be different: {}",
+                input.display()
+            ));
+        }
+
+        let input: Box<dyn Read + Send> = match &self.input_source {
+            DataSource::Tcp(config) => {
+                let address = (&*config.host, config.port);
+                let stream = TcpStream::connect(address).wrap_err("Error opening TCP stream")?;
+                stream
+                    .set_read_timeout(Some(config.read_timeout()))
+                    .wrap_err("Error setting TCP read timeout")?;
+                Box::new(stream)
+            }
+            DataSource::Serial(config) => {
+                let builder = serialport::new(&config.serial_path, config.baudrate)
+                    .data_bits(config.data_bits.into())
+                    .flow_control(config.flow_control.into())
+                    .parity(config.parity.into())
+                    .stop_bits(config.stop_bits.into())
+                    .timeout(config.read_timeout());
+                // Exclusive access is only available on Unix platforms
+                #[cfg(unix)]
+                let builder = builder.exclusive(config.exclusive.unwrap_or(true));
+                let serial_port = builder.open().wrap_err("Error opening serial port")?;
+                Box::new(serial_port)
+            }
+            DataSource::File(config) => {
+                Box::new(File::open(&config.path).wrap_err("Error opening file")?)
+            }
+        };
+
+        if let Some(output) = self.output_file.as_ref() {
+            let output_file = File::create(output).wrap_err("Error creating output file")?;
+            self.output_writer = Some(BufWriter::new(output_file));
+        }
+
+        let reader = BufReader::new(input);
+        let parser = Arc::clone(&self.nmea_data);
+
+        self.spawn_worker("NMEA reader", move |actor, running| {
+            run_nmea_handler(actor, running, reader, parser)
+        });
+
+        Ok(())
+    }
+
     /// Handles the tick event of the terminal.
     fn tick(&mut self) {}
 
     /// Set running to false to quit the application and wait for each spawned thread.
-    fn quit(&mut self) -> Result<()> {
+    fn quit(&mut self) {
         self.running.store(false, Ordering::Relaxed);
-        Ok(())
-    }
-
-    /// Spawns a worker thread that reports errors/panics through the event channel.
-    fn spawn_worker<F>(&mut self, name: &'static str, worker: F)
-    where
-        F: FnOnce(EventThread, Arc<AtomicBool>) -> Result<()> + Send + 'static,
-    {
-        let actor = self.event_handler.create_actor();
-        let error_actor = actor.clone();
-        let running = Arc::clone(&self.running);
-
-        let handle = thread::spawn(move || {
-            let result = panic::catch_unwind(AssertUnwindSafe(|| worker(actor, running)))
-                .unwrap_or_else(|_| Err(eyre!("Thread panicked")));
-            result
-                .inspect_err(|_| error_actor.send(Event::WorkerError))
-                .wrap_err(format!("{} worker failed", name))
-        });
-
-        self.workers.push((name, handle));
     }
 
     fn start(&mut self) {
@@ -320,6 +299,26 @@ impl App {
         }
 
         first_error.map_or(Ok(()), Err)
+    }
+
+    /// Spawns a worker thread that reports errors/panics through the event channel.
+    fn spawn_worker<F>(&mut self, name: &'static str, worker: F)
+    where
+        F: FnOnce(EventThread, Arc<AtomicBool>) -> Result<()> + Send + 'static,
+    {
+        let actor = self.event_handler.create_actor();
+        let error_actor = actor.clone();
+        let running = Arc::clone(&self.running);
+
+        let handle = thread::spawn(move || {
+            let result = panic::catch_unwind(AssertUnwindSafe(|| worker(actor, running)))
+                .unwrap_or_else(|_| Err(eyre!("Thread panicked")));
+            result
+                .inspect_err(|_| error_actor.send(Event::WorkerError))
+                .wrap_err(format!("{} worker failed", name))
+        });
+
+        self.workers.push((name, handle));
     }
 
     /// Returns the key bindings.

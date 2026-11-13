@@ -115,9 +115,9 @@ impl App {
 /// This function emits NMEA events.
 pub fn run_nmea_handler<R: BufRead>(
     actor: EventThread,
+    app_running: Arc<AtomicBool>,
     mut reader: R,
     parser: Arc<Mutex<Nmea>>,
-    app_running: Arc<AtomicBool>,
 ) -> Result<()> {
     let mut line = Vec::new();
 
@@ -355,7 +355,7 @@ mod tests {
         let worker_running = Arc::clone(&running);
 
         let handle =
-            thread::spawn(move || run_nmea_handler(actor, TimeoutReader, parser, worker_running));
+            thread::spawn(move || run_nmea_handler(actor, worker_running, TimeoutReader, parser));
 
         thread::sleep(Duration::from_millis(50));
         running.store(false, Ordering::Relaxed);

@@ -1,6 +1,7 @@
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::TcpStream;
+use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -8,7 +9,7 @@ use std::thread::{self, JoinHandle};
 
 use circular_buffer::FixedCircularBuffer;
 use color_eyre::Result;
-use color_eyre::eyre::{Context, eyre};
+use color_eyre::eyre::{WrapErr, eyre};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
@@ -17,7 +18,7 @@ use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
 
 use crate::cli::{Cli, DataSource};
-use crate::event::{Event, EventHandler, run_tui_handler};
+use crate::event::{Event, EventHandler, EventThread, run_tui_handler};
 use crate::gnss::{NavigationData, SvData};
 use crate::nmea::{RawNmeaLog, run_nmea_handler};
 use crate::setup::{AppSetup, SetupAction};
@@ -54,7 +55,7 @@ pub struct App {
     /// Writer for the output file
     output_writer: Option<BufWriter<File>>,
     /// Handles of each spawned thread for graceful shutdown
-    threads: Vec<JoinHandle<Result<()>>>,
+    workers: Vec<(&'static str, JoinHandle<Result<()>>)>,
 }
 
 impl App {
@@ -74,7 +75,7 @@ impl App {
             input_source: args.source.unwrap_or_default(),
             output_file: args.output,
             output_writer: None,
-            threads: Vec::new(),
+            workers: Vec::new(),
         };
 
         // If interactive mode wasn't invoked, we enqueue a message to setup the reader immediatly
@@ -87,77 +88,21 @@ impl App {
         app
     }
 
-    /// Performs the application setup to process NMEA data
-    ///
-    /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
-    /// parsing and event generation is done in a thread loop. If an output file is specified, it
-    /// will be opened and the validated NMEA sentences will be written to it.
-    pub fn setup(&mut self) -> Result<()> {
-        if let (DataSource::File(config), Some(output)) =
-            (&self.input_source, self.output_file.as_ref())
-            && let (Ok(input), Ok(output)) = (config.path.canonicalize(), output.canonicalize())
-            && input == output
-        {
-            return Err(eyre!(
-                "Input and output files must be different: {}",
-                input.display()
-            ));
-        }
-
-        let input: Box<dyn Read + Send> = match &self.input_source {
-            DataSource::Tcp(config) => {
-                let address = (&*config.host, config.port);
-                let stream = TcpStream::connect(address).wrap_err("Error opening TCP stream")?;
-                stream
-                    .set_read_timeout(Some(config.read_timeout()))
-                    .wrap_err("Error setting TCP read timeout")?;
-                Box::new(stream)
-            }
-            DataSource::Serial(config) => {
-                let builder = serialport::new(&config.serial_path, config.baudrate)
-                    .data_bits(config.data_bits.into())
-                    .flow_control(config.flow_control.into())
-                    .parity(config.parity.into())
-                    .stop_bits(config.stop_bits.into())
-                    .timeout(config.read_timeout());
-                // Exclusive access is only available on Unix platforms
-                #[cfg(unix)]
-                let builder = builder.exclusive(config.exclusive.unwrap_or(true));
-                let serial_port = builder.open().wrap_err("Error opening serial port")?;
-                Box::new(serial_port)
-            }
-            DataSource::File(config) => {
-                Box::new(File::open(&config.path).wrap_err("Error opening file")?)
-            }
-        };
-
-        if let Some(output) = self.output_file.as_ref() {
-            let output_file = File::create(output).wrap_err("Error creating output file")?;
-            self.output_writer = Some(BufWriter::new(output_file));
-        }
-
-        let reader = BufReader::new(input);
-        let actor = self.event_handler.create_actor();
-        let parser = Arc::clone(&self.nmea_data);
-        let running = Arc::clone(&self.running);
-
-        let handle = thread::spawn(move || run_nmea_handler(actor, reader, parser, running));
-
-        self.threads.push(handle);
-
-        Ok(())
-    }
-
     /// Run the application's main loop.
     pub fn run(mut self, mut terminal: DefaultTerminal) -> Result<()> {
-        self.start()?;
+        self.start();
 
-        while self.running.load(Ordering::Relaxed) {
-            terminal.draw(|frame| self.render(frame))?;
-            self.handle_events()?;
-        }
+        let loop_result: Result<()> = (|| {
+            while self.running.load(Ordering::Relaxed) {
+                terminal.draw(|frame| self.render(frame))?;
+                self.handle_events()?;
+            }
+            Ok(())
+        })();
 
-        self.terminate()
+        let shutdown_result = self.shutdown();
+
+        loop_result.and(shutdown_result)
     }
 
     /// Handles all the events emitted by the event handler.
@@ -170,11 +115,12 @@ impl App {
                 _ => {}
             },
             Event::App(app_event) => match app_event {
-                AppEvent::Quit => self.quit()?,
+                AppEvent::Quit => self.quit(),
                 AppEvent::SetupReady => self.setup()?,
                 AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
+            Event::WorkerError => self.quit(),
         }
         Ok(())
     }
@@ -256,45 +202,123 @@ impl App {
         Ok(())
     }
 
+    /// Performs the application setup to process NMEA data
+    ///
+    /// Creates an event runner which handles the conection, reception and parsing of NMEA data. The
+    /// parsing and event generation is done in a thread loop. If an output file is specified, it
+    /// will be opened and the validated NMEA sentences will be written to it.
+    fn setup(&mut self) -> Result<()> {
+        if let (DataSource::File(config), Some(output)) =
+            (&self.input_source, self.output_file.as_ref())
+            && let (Ok(input), Ok(output)) = (config.path.canonicalize(), output.canonicalize())
+            && input == output
+        {
+            return Err(eyre!(
+                "Input and output files must be different: {}",
+                input.display()
+            ));
+        }
+
+        let input: Box<dyn Read + Send> = match &self.input_source {
+            DataSource::Tcp(config) => {
+                let address = (&*config.host, config.port);
+                let stream = TcpStream::connect(address).wrap_err("Error opening TCP stream")?;
+                stream
+                    .set_read_timeout(Some(config.read_timeout()))
+                    .wrap_err("Error setting TCP read timeout")?;
+                Box::new(stream)
+            }
+            DataSource::Serial(config) => {
+                let builder = serialport::new(&config.serial_path, config.baudrate)
+                    .data_bits(config.data_bits.into())
+                    .flow_control(config.flow_control.into())
+                    .parity(config.parity.into())
+                    .stop_bits(config.stop_bits.into())
+                    .timeout(config.read_timeout());
+                // Exclusive access is only available on Unix platforms
+                #[cfg(unix)]
+                let builder = builder.exclusive(config.exclusive.unwrap_or(true));
+                let serial_port = builder.open().wrap_err("Error opening serial port")?;
+                Box::new(serial_port)
+            }
+            DataSource::File(config) => {
+                Box::new(File::open(&config.path).wrap_err("Error opening file")?)
+            }
+        };
+
+        if let Some(output) = self.output_file.as_ref() {
+            let output_file = File::create(output).wrap_err("Error creating output file")?;
+            self.output_writer = Some(BufWriter::new(output_file));
+        }
+
+        let reader = BufReader::new(input);
+        let parser = Arc::clone(&self.nmea_data);
+
+        self.spawn_worker("NMEA reader", move |actor, running| {
+            run_nmea_handler(actor, running, reader, parser)
+        });
+
+        Ok(())
+    }
+
     /// Handles the tick event of the terminal.
     fn tick(&mut self) {}
 
     /// Set running to false to quit the application and wait for each spawned thread.
-    fn quit(&mut self) -> Result<()> {
+    fn quit(&mut self) {
         self.running.store(false, Ordering::Relaxed);
-        Ok(())
     }
 
-    fn start(&mut self) -> Result<()> {
-        let actor = self.event_handler.create_actor();
-        let running = Arc::clone(&self.running);
-
-        let handle = thread::spawn(move || run_tui_handler(actor, running));
-
-        self.threads.push(handle);
-
-        Ok(())
+    fn start(&mut self) {
+        self.spawn_worker("event handler", |actor, running| {
+            run_tui_handler(actor, running)
+        });
     }
 
-    fn terminate(&mut self) -> Result<()> {
+    fn shutdown(&mut self) -> Result<()> {
         self.running.store(false, Ordering::Relaxed);
 
-        if let Some(writer) = self.output_writer.as_mut() {
-            writer.flush().wrap_err("Error flushing output file")?;
+        let mut first_error = None;
+
+        if let Some(mut writer) = self.output_writer.take()
+            && let Err(error) = writer.flush().wrap_err("Error flushing output file")
+        {
+            first_error = Some(error);
         }
 
-        for handle in self.threads.drain(..) {
+        for (name, handle) in self.workers.drain(..) {
             match handle.join() {
                 Err(_) => {
-                    return Err(eyre!("Error joining working threads"));
+                    first_error.get_or_insert_with(|| eyre!("{name} worker panicked"));
                 }
-                Ok(Err(e)) => {
-                    return Err(e);
+                Ok(Err(error)) => {
+                    first_error.get_or_insert(error);
                 }
-                _ => {}
+                Ok(Ok(())) => {}
             }
         }
-        Ok(())
+
+        first_error.map_or(Ok(()), Err)
+    }
+
+    /// Spawns a worker thread that reports errors/panics through the event channel.
+    fn spawn_worker<F>(&mut self, name: &'static str, worker: F)
+    where
+        F: FnOnce(EventThread, Arc<AtomicBool>) -> Result<()> + Send + 'static,
+    {
+        let actor = self.event_handler.create_actor();
+        let error_actor = actor.clone();
+        let running = Arc::clone(&self.running);
+
+        let handle = thread::spawn(move || {
+            let result = panic::catch_unwind(AssertUnwindSafe(|| worker(actor, running)))
+                .unwrap_or_else(|_| Err(eyre!("Thread panicked")));
+            result
+                .inspect_err(|_| error_actor.send(Event::WorkerError))
+                .wrap_err(format!("{} worker failed", name))
+        });
+
+        self.workers.push((name, handle));
     }
 
     /// Returns the key bindings.
@@ -309,6 +333,12 @@ impl App {
             AppTab::Map => vec![],
             AppTab::Raw => vec![],
         }
+    }
+}
+
+impl Drop for App {
+    fn drop(&mut self) {
+        let _ = self.shutdown();
     }
 }
 
@@ -404,7 +434,52 @@ mod tests {
         assert!(app.setup().is_ok());
         assert_eq!(fs::read(&input).unwrap(), b"data");
         assert!(output.exists());
-        app.terminate().unwrap();
+        app.shutdown().unwrap();
+
+        fs::remove_file(&input).ok();
+        fs::remove_file(&output).ok();
+    }
+
+    #[test]
+    fn shutdown_returns_first_worker_error() {
+        let input = temp_path("shutdown-input.nmea");
+        let output = temp_path("shutdown-output.nmea");
+        fs::write(&input, b"data").unwrap();
+        fs::remove_file(&output).ok();
+        let mut app = app_with_paths(&input, &output);
+
+        app.workers.push(("ok", thread::spawn(|| Ok(()))));
+        app.workers.push((
+            "boom",
+            thread::spawn(|| -> Result<()> { Err(eyre!("boom")) }),
+        ));
+
+        let error = app.shutdown().unwrap_err();
+        assert_eq!(error.to_string(), "boom");
+
+        fs::remove_file(&input).ok();
+        fs::remove_file(&output).ok();
+    }
+
+    #[test]
+    fn worker_panic_is_reported() {
+        let input = temp_path("panic-input.nmea");
+        let output = temp_path("panic-output.nmea");
+        fs::write(&input, b"data").unwrap();
+        fs::remove_file(&output).ok();
+        let mut app = app_with_paths(&input, &output);
+
+        app.spawn_worker("boom", |_, _| panic!("boom"));
+
+        // Wait until the worker signals its failure through the event channel. The report itself
+        // is not part of the event: it is carried by the worker handle instead
+        while !matches!(app.event_handler.next().unwrap(), Event::WorkerError) {}
+
+        // Shutting down joins the worker and surfaces its report, which keeps both the worker
+        // name and the failure cause
+        let error = app.shutdown().unwrap_err();
+        assert_eq!(error.to_string(), "boom worker failed");
+        assert_eq!(error.root_cause().to_string(), "Thread panicked");
 
         fs::remove_file(&input).ok();
         fs::remove_file(&output).ok();

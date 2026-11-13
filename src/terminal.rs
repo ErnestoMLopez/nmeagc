@@ -1,4 +1,4 @@
-use std::{io, panic};
+use std::{io, panic, thread};
 
 use color_eyre::Result;
 use crossterm::event::{DisableMouseCapture, EnableMouseCapture};
@@ -8,7 +8,7 @@ use ratatui::{DefaultTerminal, Terminal};
 
 /// Initializes the terminal interface.
 ///
-/// It enables the raw mode and sets terminal properties.
+/// It sets a custom panic hook, enables the raw mode and sets terminal properties.
 pub fn init() -> DefaultTerminal {
     set_panic_hook();
     try_init().expect("failed to initialize the terminal")
@@ -25,11 +25,19 @@ pub fn restore() {
     }
 }
 
-/// Set panic hook to reset the terminal interface on panic.
+/// Set custom panic hook to reset the terminal interface.
+///
+/// Only a panic in the main thread will trigger the terminal restoration. Panics in worker threads
+/// are caught during unwinding, and send an event to the main thread to do a proper shutdown, which
+/// includes the terminal restoration. This is done to avoid restoring the terminal from a worker
+/// thread panic and then having the main thread rendering on the restored terminal.
 fn set_panic_hook() {
+    let main_thread_id = thread::current().id();
     let panic_hook = panic::take_hook();
     panic::set_hook(Box::new(move |panic_info| {
-        restore();
+        if thread::current().id() == main_thread_id {
+            restore();
+        }
         panic_hook(panic_info);
     }));
 }

@@ -20,6 +20,8 @@ pub enum Event {
     Crossterm(CrosstermEvent),
     /// Application events.
     App(AppEvent),
+    /// Event emitted by a worker thread in case of error or panic.
+    WorkerError,
 }
 
 /// Terminal event handler.
@@ -70,6 +72,7 @@ impl EventHandler {
 }
 
 /// A thread that handles reading crossterm events and emitting tick events on a regular schedule.
+#[derive(Clone)]
 pub struct EventThread {
     /// Event sender channel.
     sender: mpsc::Sender<Event>,

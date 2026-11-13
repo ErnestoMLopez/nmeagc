@@ -239,7 +239,7 @@ impl App {
                 #[cfg(unix)]
                 let builder = builder.exclusive(config.exclusive.unwrap_or(true));
                 let port = builder.open().wrap_err("Error opening serial port")?;
-                Box::new(port)
+                port
             }
             DataSource::File(config) => {
                 let file = File::open(&config.path).wrap_err("Error opening file")?;

@@ -71,7 +71,25 @@ impl From<nmea::sentences::GnssType> for Gnss {
 
 impl App {
     pub fn update_from_gga(&mut self) {
-        // TODO
+        let nmea_data = self.nmea_data.lock().expect("mutex poisoned");
+        let nav_data = &mut self.nav_data;
+
+        nav_data.solution_type = nmea_data
+            .fix_type
+            .map_or(SolutionType::Invalid, SolutionType::from);
+        // GGA carries the time of day only. The date is taken from the last RMC sentence
+        // merged into the parser, so the timestamp is only available once both are known.
+        nav_data.time = nmea_data
+            .fix_date
+            .zip(nmea_data.fix_time)
+            .map(|(date, time)| date.and_time(time).and_utc());
+        nav_data.latitude = nmea_data.latitude;
+        nav_data.longitude = nmea_data.longitude;
+        nav_data.altitude = nmea_data.altitude.map(f64::from);
+        nav_data.geoid_separation = nmea_data.geoid_separation.map(f64::from);
+        nav_data.svs_used = nmea_data
+            .num_of_fix_satellites
+            .map_or(0, |svs| u8::try_from(svs).unwrap_or(u8::MAX));
     }
 
     pub fn update_from_rmc(&mut self) {
@@ -322,7 +340,62 @@ mod tests {
     use std::thread;
     use std::time::Duration;
 
+    use chrono::NaiveDate;
+    use clap::Parser;
+
     use super::*;
+    use crate::cli::Cli;
+
+    const RMC: &str = "$GPRMC,092750.000,A,5321.6802,N,00630.3372,W,0.02,31.66,280511,,,A*43";
+    const GGA: &str = "$GPGGA,092750.000,5321.6802,N,00630.3372,W,1,8,1.03,61.7,M,55.2,M,,*76";
+
+    fn app_with_parser(sentences: &[&str]) -> App {
+        let args = Cli::try_parse_from(["nmeagc", "-i"]).unwrap();
+        let app = App::new(args);
+
+        {
+            let mut parser = app.nmea_data.lock().unwrap();
+            for sentence in sentences {
+                parser.parse(sentence).unwrap();
+            }
+        }
+
+        app
+    }
+
+    #[test]
+    fn gga_updates_navigation_data() {
+        let mut app = app_with_parser(&[GGA]);
+
+        app.update_from_gga();
+
+        let latitude = app.nav_data.latitude.unwrap();
+        let longitude = app.nav_data.longitude.unwrap();
+
+        assert_eq!(app.nav_data.solution_type, SolutionType::Sps3D);
+        assert!((latitude - 53.3613366667).abs() < 1e-9);
+        assert!((longitude - -6.50562).abs() < 1e-9);
+        assert_eq!(app.nav_data.altitude, Some(f64::from(61.7_f32)));
+        assert_eq!(app.nav_data.geoid_separation, Some(f64::from(55.2_f32)));
+        assert_eq!(app.nav_data.svs_used, 8);
+        // GGA has no date, so the UTC timestamp can't be built from it alone
+        assert_eq!(app.nav_data.time, None);
+    }
+
+    #[test]
+    fn gga_time_uses_date_from_last_rmc() {
+        let mut app = app_with_parser(&[RMC, GGA]);
+
+        app.update_from_gga();
+
+        let expected = NaiveDate::from_ymd_opt(2011, 5, 28)
+            .unwrap()
+            .and_hms_opt(9, 27, 50)
+            .unwrap()
+            .and_utc();
+
+        assert_eq!(app.nav_data.time, Some(expected));
+    }
 
     struct TimeoutReader;
 

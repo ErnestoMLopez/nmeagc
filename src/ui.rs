@@ -102,25 +102,23 @@ fn render_monitor_tab(app: &mut App, frame: &mut Frame, area: Rect) {
         .title("Position charts")
         .style(THEME.borders);
 
-    let nmea_data = app.nmea_data.lock().expect("mutex poisoned");
-
     let lines = vec![
         Line::from(format!(
             "Latitude:  {}",
-            nmea_data
-                .latitude()
+            app.nav_data
+                .latitude
                 .map_or("-".to_string(), |lat| { format_latitude(lat) })
         )),
         Line::from(format!(
             "Longitude: {}",
-            nmea_data
-                .longitude()
+            app.nav_data
+                .longitude
                 .map_or("-".to_string(), format_longitude)
         )),
         Line::from(format!(
             "Altitude:  {} m (MSL)",
-            nmea_data
-                .altitude()
+            app.nav_data
+                .altitude
                 .map(|alt| format!("{:.3}", alt))
                 .unwrap_or("-".to_string())
         )),

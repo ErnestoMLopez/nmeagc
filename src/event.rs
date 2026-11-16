@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
 use crossterm::event::{self, Event as CrosstermEvent};
+use log::debug;
 
 use crate::app::AppEvent;
 
@@ -94,6 +95,8 @@ impl EventThread {
 ///
 /// This function emits tick events at a fixed rate and polls for crossterm events in between.
 pub fn run_tui_handler(actor: EventThread, app_running: Arc<AtomicBool>) -> Result<()> {
+    debug!("Event handler worker thread started");
+
     let tick_interval = Duration::from_secs_f64(1.0 / TICK_FPS);
     let mut last_tick = Instant::now();
 

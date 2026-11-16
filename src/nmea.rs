@@ -4,6 +4,7 @@ use std::sync::{Arc, Mutex};
 
 use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
+use log::debug;
 use nmea::{Nmea, SentenceType};
 
 use crate::app::{App, AppEvent};
@@ -120,6 +121,8 @@ pub fn run_nmea_handler<R: BufRead>(
     parser: Arc<Mutex<Nmea>>,
 ) -> Result<()> {
     let mut line = Vec::new();
+
+    debug!("NMEA handler worker thread started");
 
     while app_running.load(Ordering::Relaxed) {
         match reader.read_until(b'\n', &mut line) {

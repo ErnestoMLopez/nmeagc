@@ -7,6 +7,7 @@ pub mod app;
 pub mod cli;
 pub mod event;
 pub mod gnss;
+pub mod logging;
 pub mod nmea;
 pub mod setup;
 pub mod terminal;
@@ -16,6 +17,7 @@ pub mod widgets;
 
 fn main() -> color_eyre::Result<()> {
     color_eyre::install()?;
+    logging::init()?;
     let args = Cli::parse();
     let terminal = terminal::init();
     let result = App::new(args).run(terminal);

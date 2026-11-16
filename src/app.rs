@@ -13,6 +13,7 @@ use color_eyre::eyre::{WrapErr, eyre};
 use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
+use log::info;
 use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
@@ -226,6 +227,7 @@ impl App {
                 stream
                     .set_read_timeout(Some(config.read_timeout()))
                     .wrap_err("Error setting TCP read timeout")?;
+                info!("Configuring input reader from TCP stream...");
                 Box::new(stream)
             }
             DataSource::Serial(config) => {
@@ -239,16 +241,19 @@ impl App {
                 #[cfg(unix)]
                 let builder = builder.exclusive(config.exclusive.unwrap_or(true));
                 let port = builder.open().wrap_err("Error opening serial port")?;
+                info!("Configuring input reader from serial port...");
                 port
             }
             DataSource::File(config) => {
                 let file = File::open(&config.path).wrap_err("Error opening file")?;
+                info!("Configuring input reader from file...");
                 Box::new(file)
             }
         };
 
         if let Some(output) = self.output_file.as_ref() {
             let output_file = File::create(output).wrap_err("Error creating output file")?;
+            info!("Creating output file: {:?}", output);
             self.output_writer = Some(BufWriter::new(output_file));
         }
 
@@ -271,12 +276,22 @@ impl App {
     }
 
     fn start(&mut self) {
+        let mode = if self.interactive_setup {
+            "interactive"
+        } else {
+            "nominal"
+        };
+
+        info!("Starting app in {} mode", mode);
+
         self.spawn_worker("event handler", |actor, running| {
             run_tui_handler(actor, running)
         });
     }
 
     fn shutdown(&mut self) -> Result<()> {
+        info!("Shuting down app");
+
         self.running.store(false, Ordering::Relaxed);
 
         let mut first_error = None;
@@ -310,6 +325,8 @@ impl App {
         let actor = self.event_handler.create_actor();
         let error_actor = actor.clone();
         let running = Arc::clone(&self.running);
+
+        info!("Spawning {} worker thread", name);
 
         let handle = thread::spawn(move || {
             let result = panic::catch_unwind(AssertUnwindSafe(|| worker(actor, running)))

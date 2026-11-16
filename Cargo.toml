@@ -16,6 +16,8 @@ chrono = "0.4.45"
 nmea = "0.8.0"
 serialport = "4.9.0"
 clap = { version = "4.6.7", features = ["derive", "cargo"] }
+tui-logger = "0.18.3"
+log = "0.4.35"
 
 # Read the optimization guideline for more details: https://ratatui.rs/recipes/apps/release-your-app/#optimizations
 [profile.release]

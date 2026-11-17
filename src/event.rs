@@ -13,7 +13,7 @@ use crate::app::AppEvent;
 const TICK_FPS: f64 = 30.0;
 
 /// Representation of all possible events.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum Event {
     /// Event emitted on a regular schedule.
     Tick,

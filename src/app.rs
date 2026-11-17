@@ -14,14 +14,14 @@ use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
 use log::info;
-use nmea::{Nmea, SentenceType};
+use nmea::Nmea;
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
 
 use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler, EventThread, run_tui_handler};
 use crate::gnss::{NavigationData, SvData};
-use crate::nmea::{RawNmeaLog, run_nmea_handler};
+use crate::nmea::{NmeaGnssMessage, RawNmeaLog, run_nmea_handler};
 use crate::setup::{AppSetup, SetupAction};
 
 /// Maximum amount of NMEA sentences to store and render in the raw data tab
@@ -118,7 +118,7 @@ impl App {
             Event::App(app_event) => match app_event {
                 AppEvent::Quit => self.quit(),
                 AppEvent::SetupReady => self.setup()?,
-                AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
+                AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(&msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
             Event::WorkerError => self.quit(),
@@ -181,15 +181,14 @@ impl App {
         Ok(())
     }
 
-    fn handle_nmea_msg(&mut self, nmea_msg: SentenceType) -> Result<()> {
+    fn handle_nmea_msg(&mut self, nmea_msg: &NmeaGnssMessage) -> Result<()> {
         match nmea_msg {
-            SentenceType::GGA => self.update_from_gga(),
-            SentenceType::RMC => self.update_from_rmc(),
-            SentenceType::GNS => {}
-            SentenceType::GSA => {}
-            SentenceType::GSV => self.update_from_gsv(),
-            SentenceType::GLL => {}
-            _ => {}
+            NmeaGnssMessage::Gga(gga) => self.update_from_gga(gga),
+            NmeaGnssMessage::Rmc(rmc) => self.update_from_rmc(rmc),
+            NmeaGnssMessage::Gns(_) => {}
+            NmeaGnssMessage::Gsa(_) => {}
+            NmeaGnssMessage::Gsv(_) => self.update_from_gsv(),
+            NmeaGnssMessage::Gll(_) => {}
         }
         Ok(())
     }
@@ -361,14 +360,14 @@ impl Drop for App {
 }
 
 /// Application events.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum AppEvent {
     /// Quit the application.
     Quit,
     /// Application setup finished (via CLI or interactive setup).
     SetupReady,
     /// NMEA message received.
-    NmeaMessage(SentenceType),
+    NmeaMessage(Box<NmeaGnssMessage>),
     /// Raw NMEA sentence for raw data logging.
     RawNmeaSentence(RawNmeaLog),
 }

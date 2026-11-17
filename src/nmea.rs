@@ -5,11 +5,38 @@ use std::sync::{Arc, Mutex};
 use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
 use log::debug;
-use nmea::{Nmea, SentenceType};
+use nmea::sentences::{GgaData, GllData, GnsData, GsaData, GsvData, RmcData};
+use nmea::{Nmea, ParseResult};
 
 use crate::app::{App, AppEvent};
 use crate::event::{Event, EventThread};
 use crate::gnss::{Gnss, GnssSignal, SignalData, SvData};
+
+/// NMEA messages relevant to the application, already parsed from their raw sentence.
+#[derive(Debug)]
+pub enum NmeaGnssMessage {
+    Gga(GgaData),
+    Rmc(RmcData),
+    Gns(GnsData),
+    Gsa(GsaData),
+    Gsv(GsvData),
+    Gll(GllData),
+}
+
+impl TryFrom<ParseResult> for NmeaGnssMessage {
+    type Error = ();
+    fn try_from(result: ParseResult) -> Result<Self, Self::Error> {
+        match result {
+            ParseResult::GGA(data) => Ok(Self::Gga(data)),
+            ParseResult::RMC(data) => Ok(Self::Rmc(data)),
+            ParseResult::GNS(data) => Ok(Self::Gns(data)),
+            ParseResult::GSA(data) => Ok(Self::Gsa(data)),
+            ParseResult::GSV(data) => Ok(Self::Gsv(data)),
+            ParseResult::GLL(data) => Ok(Self::Gll(data)),
+            _ => Err(()),
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct RawNmeaLog {
@@ -70,30 +97,36 @@ impl From<nmea::sentences::GnssType> for Gnss {
 }
 
 impl App {
-    pub fn update_from_gga(&mut self) {
-        let nmea_data = self.nmea_data.lock().expect("mutex poisoned");
+    pub fn update_from_gga(&mut self, gga: &GgaData) {
         let nav_data = &mut self.nav_data;
 
-        nav_data.solution_type = nmea_data
+        nav_data.solution_type = gga
             .fix_type
             .map_or(SolutionType::Invalid, SolutionType::from);
-        // GGA carries the time of day only. The date is taken from the last RMC sentence
-        // merged into the parser, so the timestamp is only available once both are known.
-        nav_data.time = nmea_data
-            .fix_date
-            .zip(nmea_data.fix_time)
-            .map(|(date, time)| date.and_time(time).and_utc());
-        nav_data.latitude = nmea_data.latitude;
-        nav_data.longitude = nmea_data.longitude;
-        nav_data.altitude = nmea_data.altitude.map(f64::from);
-        nav_data.geoid_separation = nmea_data.geoid_separation.map(f64::from);
-        nav_data.svs_used = nmea_data
-            .num_of_fix_satellites
+        // GGA carries the time of day only. The date is taken from the last known UTC timestamp, so
+        // the timestamp is only available once both are known.
+        nav_data.time = gga.fix_time.and_then(|time| {
+            let date = nav_data.time?.date_naive();
+            Some(date.and_time(time).and_utc())
+        });
+        nav_data.latitude = gga.latitude;
+        nav_data.longitude = gga.longitude;
+        nav_data.altitude = gga.altitude.map(f64::from);
+        nav_data.geoid_separation = gga.geoid_separation.map(f64::from);
+        nav_data.svs_used = gga
+            .fix_satellites
             .map_or(0, |svs| u8::try_from(svs).unwrap_or(u8::MAX));
     }
 
-    pub fn update_from_rmc(&mut self) {
-        // TODO
+    pub fn update_from_rmc(&mut self, rmc: &RmcData) {
+        let nav_data = &mut self.nav_data;
+
+        nav_data.time = rmc
+            .fix_date
+            .zip(rmc.fix_time)
+            .map(|(date, time)| date.and_time(time).and_utc());
+        nav_data.latitude = rmc.lat;
+        nav_data.longitude = rmc.lon;
     }
 
     pub fn update_from_gsv(&mut self) {
@@ -152,33 +185,31 @@ pub fn run_nmea_handler<R: BufRead>(
                     std::str::from_utf8(&line).wrap_err("Error decoding NMEA sentence")?;
                 let sentence = sentence.strip_suffix("\r\n").unwrap_or(sentence);
 
-                let mut nmea_parser = parser.lock().expect("mutex poisoned");
+                let parsed = nmea::parse_str(sentence);
 
-                let raw_status = match nmea_parser.parse(sentence) {
-                    Ok(sentence_type) => {
-                        actor.send(Event::App(AppEvent::NmeaMessage(sentence_type)));
-                        match sentence_type {
-                            SentenceType::GGA
-                            | SentenceType::RMC
-                            | SentenceType::GNS
-                            | SentenceType::GSA
-                            | SentenceType::GSV
-                            | SentenceType::GLL => RawNmeaStatus::Gnss,
-                            _ => RawNmeaStatus::Other,
-                        }
+                let raw_status = match &parsed {
+                    Ok(ParseResult::GGA(_)) | Ok(ParseResult::RMC(_)) | Ok(ParseResult::GSV(_)) => {
+                        RawNmeaStatus::Gnss
                     }
-                    Err(err) => {
-                        // Atajamos las sentencias que nos interesarían pero no son soportados por
-                        // la crate nmea. Los marcamos como tales, y al resto como no importantes.
-                        match err {
-                            nmea::Error::Unsupported(SentenceType::GST) => {
-                                RawNmeaStatus::Unimplemented
-                            }
-                            nmea::Error::Unsupported(_) => RawNmeaStatus::Other,
-                            _ => RawNmeaStatus::Error,
-                        }
-                    }
+                    Ok(ParseResult::GNS(_))
+                    | Ok(ParseResult::GSA(_))
+                    | Ok(ParseResult::GLL(_))
+                    | Ok(ParseResult::GST(_)) => RawNmeaStatus::Unimplemented,
+                    Ok(_) => RawNmeaStatus::Other,
+                    Err(_) => RawNmeaStatus::Error,
                 };
+
+                // TODO: Remove once the application owns all the NMEA state.
+                {
+                    let mut nmea_parser = parser.lock().expect("mutex poisoned");
+                    let _ = nmea_parser.parse(sentence);
+                }
+
+                if let Ok(result) = parsed
+                    && let Ok(message) = NmeaGnssMessage::try_from(result)
+                {
+                    actor.send(Event::App(AppEvent::NmeaMessage(Box::new(message))));
+                }
 
                 let nmea_log = RawNmeaLog {
                     sentence: sentence.to_string(),
@@ -349,25 +380,30 @@ mod tests {
     const RMC: &str = "$GPRMC,092750.000,A,5321.6802,N,00630.3372,W,0.02,31.66,280511,,,A*43";
     const GGA: &str = "$GPGGA,092750.000,5321.6802,N,00630.3372,W,1,8,1.03,61.7,M,55.2,M,,*76";
 
-    fn app_with_parser(sentences: &[&str]) -> App {
+    fn app() -> App {
         let args = Cli::try_parse_from(["nmeagc", "-i"]).unwrap();
-        let app = App::new(args);
+        App::new(args)
+    }
 
-        {
-            let mut parser = app.nmea_data.lock().unwrap();
-            for sentence in sentences {
-                parser.parse(sentence).unwrap();
-            }
+    fn gga(sentence: &str) -> GgaData {
+        match nmea::parse_str(sentence).unwrap() {
+            ParseResult::GGA(data) => data,
+            _ => unreachable!("expected a GGA sentence"),
         }
+    }
 
-        app
+    fn rmc(sentence: &str) -> RmcData {
+        match nmea::parse_str(sentence).unwrap() {
+            ParseResult::RMC(data) => data,
+            _ => unreachable!("expected an RMC sentence"),
+        }
     }
 
     #[test]
     fn gga_updates_navigation_data() {
-        let mut app = app_with_parser(&[GGA]);
+        let mut app = app();
 
-        app.update_from_gga();
+        app.update_from_gga(&gga(GGA));
 
         let latitude = app.nav_data.latitude.unwrap();
         let longitude = app.nav_data.longitude.unwrap();
@@ -384,9 +420,10 @@ mod tests {
 
     #[test]
     fn gga_time_uses_date_from_last_rmc() {
-        let mut app = app_with_parser(&[RMC, GGA]);
+        let mut app = app();
 
-        app.update_from_gga();
+        app.update_from_rmc(&rmc(RMC));
+        app.update_from_gga(&gga(GGA));
 
         let expected = NaiveDate::from_ymd_opt(2011, 5, 28)
             .unwrap()

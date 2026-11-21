@@ -12,7 +12,7 @@ use nmea::sentences::{GgaData, GllData, GnsData, GsaData, GsvData, RmcData};
 
 use crate::app::{App, AppEvent};
 use crate::event::{Event, EventThread};
-use crate::gnss::{Gnss, GnssSignal, SignalData, SvData};
+use crate::gnss::{Gnss, GnssSignal, SolutionType, SvData};
 
 /// NMEA messages relevant to the application, already parsed from their raw sentence.
 #[derive(Debug)]
@@ -98,22 +98,6 @@ pub enum RawNmeaStatus {
     Error,
 }
 
-/// Solution type indicator
-#[derive(Clone, Copy, Debug, PartialEq, Default)]
-pub enum SolutionType {
-    #[default]
-    Invalid,
-    Sps2D,
-    Sps3D,
-    Pps,
-    RtkFixed,
-    RtkFloat,
-    Differential,
-    Extrapolated,
-    Manual,
-    Simulated,
-}
-
 impl From<nmea::sentences::FixType> for SolutionType {
     fn from(source: nmea::sentences::FixType) -> Self {
         match source {
@@ -153,35 +137,30 @@ pub struct NmeaParserData {
 
 impl App {
     pub fn update_from_gga(&mut self, gga: &GgaData) {
-        let nav_data = &mut self.nav_data;
-
-        nav_data.solution_type = gga
+        let solution_type = gga
             .fix_type
             .map_or(SolutionType::Invalid, SolutionType::from);
-        // GGA carries the time of day only. The date is taken from the last known UTC timestamp, so
-        // the timestamp is only available once both are known.
-        nav_data.time = gga.fix_time.and_then(|time| {
-            let date = nav_data.time?.date_naive();
-            Some(date.and_time(time).and_utc())
-        });
-        nav_data.latitude = gga.latitude;
-        nav_data.longitude = gga.longitude;
-        nav_data.altitude = gga.altitude.map(f64::from);
-        nav_data.geoid_separation = gga.geoid_separation.map(f64::from);
-        nav_data.svs_used = gga
+        let svs_used = gga
             .fix_satellites
             .map_or(0, |svs| u8::try_from(svs).unwrap_or(u8::MAX));
+
+        self.nav_data.update_solution(solution_type, svs_used);
+        self.nav_data.update_time_of_day(gga.fix_time);
+        self.nav_data.update_position(gga.latitude, gga.longitude);
+        self.nav_data.update_altitude(
+            gga.altitude.map(f64::from),
+            gga.geoid_separation.map(f64::from),
+        );
     }
 
     pub fn update_from_rmc(&mut self, rmc: &RmcData) {
-        let nav_data = &mut self.nav_data;
-
-        nav_data.time = rmc
+        let time = rmc
             .fix_date
             .zip(rmc.fix_time)
             .map(|(date, time)| date.and_time(time).and_utc());
-        nav_data.latitude = rmc.lat;
-        nav_data.longitude = rmc.lon;
+
+        self.nav_data.update_time(time);
+        self.nav_data.update_position(rmc.lat, rmc.lon);
     }
 
     pub fn update_from_gsv(&mut self, gsv: &GsvData) {
@@ -205,7 +184,9 @@ impl App {
         let Some(system_id) = gsa.system_id else {
             return;
         };
-        let gnss: Gnss = nmea::sentences::GnssType::from(system_id).into();
+
+        let gnss = Gnss::from(nmea::sentences::GnssType::from(system_id));
+        let signal = GnssSignal::from(gnss);
 
         // Each GSA sentence reports the satellites used for one constellation during the current
         // epoch, so a new sentence for the same constellation replaces the previous set.
@@ -217,9 +198,7 @@ impl App {
 
         for sv in &mut self.sv_data {
             if sv.gnss == gnss {
-                for signal in &mut sv.signals {
-                    signal.is_used = used_prns.contains(&sv.svid);
-                }
+                sv.update_signal(signal, None, Some(used_prns.contains(&sv.svid)));
             }
         }
 
@@ -228,6 +207,9 @@ impl App {
 
     /// Replaces the satellites of a constellation with those of a completed GSV cycle.
     fn update_sv_data(&mut self, gnss: Gnss, gsv_block: &[GsvData]) {
+        // As NMEA doesn't give information about the signal, we assume that the data is from the
+        // default signal of that GNSS
+        let signal = GnssSignal::from(gnss);
         // The satellite table is filled from the GSV sentences, which give information about the
         // satellites, not about the signals themselves. A signal entry is created per satellite
         // anyway, so the UI can work with a generic interface that also supports proprietary
@@ -239,19 +221,12 @@ impl App {
         for part in gsv_block.iter().rev() {
             for satellite in part.sats_info.iter().flatten() {
                 let svid = satellite.prn() as u8;
+                let mut sv = SvData::new(gnss, svid);
 
-                sv_data.push(SvData {
-                    gnss,
-                    svid,
-                    channel: None,
-                    signals: vec![SignalData {
-                        signal: GnssSignal::from(gnss),
-                        cn0: satellite.snr().unwrap_or_default(),
-                        is_used: used_prns.is_some_and(|prns| prns.contains(&svid)),
-                    }],
-                    elevation: satellite.elevation(),
-                    azimuth: satellite.azimuth(),
-                });
+                sv.update_geometry(satellite.elevation(), satellite.azimuth());
+                sv.update_signal(signal, satellite.snr(), None);
+
+                sv_data.push(sv);
             }
         }
 
@@ -259,6 +234,13 @@ impl App {
         // kept by the deduplication.
         sv_data.sort_by_key(|sv| (sv.gnss, sv.svid));
         sv_data.dedup_by(|a, b| a.gnss == b.gnss && a.svid == b.svid);
+
+        // GSV does not report which satellites are used, so apply the last known GSA state.
+        if let Some(used_prns) = used_prns {
+            for sv in &mut sv_data {
+                sv.update_signal(signal, None, Some(used_prns.contains(&sv.svid)));
+            }
+        }
 
         // Replace the previous report of this constellation, leaving the others untouched.
         self.sv_data.retain(|sv| sv.gnss != gnss);

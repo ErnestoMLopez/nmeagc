@@ -151,7 +151,6 @@ impl GnssSignal {
 pub struct SignalData {
     pub signal: GnssSignal,
     pub cn0: f32,
-    pub is_active: bool,
     pub is_used: bool,
 }
 

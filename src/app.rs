@@ -21,7 +21,7 @@ use strum::{Display, EnumIter, FromRepr};
 use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler, EventThread, run_tui_handler};
 use crate::gnss::{NavigationData, SvData};
-use crate::nmea::{NmeaGnssMessage, RawNmeaLog, run_nmea_handler};
+use crate::nmea::{NmeaGnssMessage, NmeaParserData, RawNmeaLog, run_nmea_handler};
 use crate::setup::{AppSetup, SetupAction};
 
 /// Maximum amount of NMEA sentences to store and render in the raw data tab
@@ -41,10 +41,12 @@ pub struct App {
     pub event_handler: EventHandler,
     /// Current tab.
     pub tab: AppTab,
-    /// Last navigation solution available
+    /// Last navigation solution available.
     pub nav_data: NavigationData,
     /// GNSS data table.
     pub sv_data: Vec<SvData>,
+    /// State accumulated while parsing the NMEA sentences.
+    pub nmea_parser_data: NmeaParserData,
     /// Raw NMEA data logs.
     pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
     /// NMEA parser and data (shared between the event handler and the application).
@@ -71,6 +73,7 @@ impl App {
             tab: AppTab::default(),
             nav_data: NavigationData::default(),
             sv_data: Vec::new(),
+            nmea_parser_data: NmeaParserData::default(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
             nmea_data: Arc::new(Mutex::new(Nmea::default())),
             input_source: args.source.unwrap_or_default(),
@@ -186,8 +189,8 @@ impl App {
             NmeaGnssMessage::Gga(gga) => self.update_from_gga(gga),
             NmeaGnssMessage::Rmc(rmc) => self.update_from_rmc(rmc),
             NmeaGnssMessage::Gns(_) => {}
-            NmeaGnssMessage::Gsa(_) => {}
-            NmeaGnssMessage::Gsv(_) => self.update_from_gsv(),
+            NmeaGnssMessage::Gsa(gsa) => self.update_from_gsa(gsa),
+            NmeaGnssMessage::Gsv(gsv) => self.update_from_gsv(gsv),
             NmeaGnssMessage::Gll(_) => {}
         }
         Ok(())

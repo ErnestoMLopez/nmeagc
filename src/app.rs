@@ -3,8 +3,8 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::TcpStream;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use circular_buffer::FixedCircularBuffer;
@@ -14,7 +14,6 @@ use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
 use log::info;
-use nmea::Nmea;
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
 
@@ -49,8 +48,6 @@ pub struct App {
     pub nmea_parser_data: NmeaParserData,
     /// Raw NMEA data logs.
     pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
-    /// NMEA parser and data (shared between the event handler and the application).
-    pub nmea_data: Arc<Mutex<Nmea>>,
     /// Selected NMEA data source.
     input_source: DataSource,
     /// Output file to write validated received messages
@@ -75,7 +72,6 @@ impl App {
             sv_data: Vec::new(),
             nmea_parser_data: NmeaParserData::default(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
-            nmea_data: Arc::new(Mutex::new(Nmea::default())),
             input_source: args.source.unwrap_or_default(),
             output_file: args.output,
             output_writer: None,
@@ -260,10 +256,9 @@ impl App {
         }
 
         let reader = BufReader::new(input);
-        let parser = Arc::clone(&self.nmea_data);
 
         self.spawn_worker("NMEA reader", move |actor, running| {
-            run_nmea_handler(actor, running, reader, parser)
+            run_nmea_handler(actor, running, reader)
         });
 
         Ok(())

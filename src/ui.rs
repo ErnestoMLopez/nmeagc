@@ -152,10 +152,7 @@ fn render_map_tab(app: &App, frame: &mut Frame, area: Rect) {
 
     let block = Block::bordered().title("Navigation").style(THEME.borders);
 
-    let coordinates = {
-        let nmea_parser = app.nmea_data.lock().expect("mutex poisoned");
-        nmea_parser.longitude.zip(nmea_parser.latitude)
-    };
+    let coordinates = app.nav_data.longitude.zip(app.nav_data.latitude);
 
     let map = Canvas::default()
         .block(Block::bordered().title("Worldmap").style(THEME.borders))

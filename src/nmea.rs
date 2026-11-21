@@ -1,14 +1,14 @@
 use std::collections::BTreeMap;
 use std::io::{self, BufRead};
 use std::mem;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
 use log::debug;
+use nmea::ParseResult;
 use nmea::sentences::{GgaData, GllData, GnsData, GsaData, GsvData, RmcData};
-use nmea::{Nmea, ParseResult};
 
 use crate::app::{App, AppEvent};
 use crate::event::{Event, EventThread};
@@ -274,7 +274,6 @@ pub fn run_nmea_handler<R: BufRead>(
     actor: EventThread,
     app_running: Arc<AtomicBool>,
     mut reader: R,
-    parser: Arc<Mutex<Nmea>>,
 ) -> Result<()> {
     let mut line = Vec::new();
 
@@ -303,12 +302,6 @@ pub fn run_nmea_handler<R: BufRead>(
                     Ok(_) => RawNmeaStatus::Other,
                     Err(_) => RawNmeaStatus::Error,
                 };
-
-                // TODO: Remove once the application owns all the NMEA state.
-                {
-                    let mut nmea_parser = parser.lock().expect("mutex poisoned");
-                    let _ = nmea_parser.parse(sentence);
-                }
 
                 if let Ok(result) = parsed
                     && let Ok(message) = NmeaGnssMessage::try_from(result)
@@ -773,12 +766,10 @@ mod tests {
     fn handler_exits_after_shutdown_when_reader_times_out() {
         let (sender, _receiver) = mpsc::channel();
         let actor = EventThread::new(sender);
-        let parser = Arc::new(Mutex::new(Nmea::default()));
         let running = Arc::new(AtomicBool::new(true));
         let worker_running = Arc::clone(&running);
 
-        let handle =
-            thread::spawn(move || run_nmea_handler(actor, worker_running, TimeoutReader, parser));
+        let handle = thread::spawn(move || run_nmea_handler(actor, worker_running, TimeoutReader));
 
         thread::sleep(Duration::from_millis(50));
         running.store(false, Ordering::Relaxed);

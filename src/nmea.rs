@@ -196,11 +196,10 @@ impl App {
             .filter_map(|prn| u8::try_from(*prn).ok())
             .collect::<Vec<_>>();
 
-        for sv in &mut self.sv_data {
-            if sv.gnss == gnss {
-                sv.update_signal(signal, None, Some(used_prns.contains(&sv.svid)));
-            }
-        }
+        self.sv_data
+            .iter_mut()
+            .filter(|sv| sv.gnss == gnss)
+            .for_each(|sv| sv.update_signal(signal, None, Some(used_prns.contains(&sv.svid))));
 
         self.nmea_parser_data.gsa_used_prns.insert(gnss, used_prns);
     }

@@ -200,46 +200,40 @@ impl App {
             .for_each(|sv| sv.update_signal(signal, None, Some(used_prns.contains(&sv.svid))));
     }
 
-    /// Updates the satellites of a constellation with those of a completed GSV cycle.
-    ///
-    /// The satellites already known are updated in place, so state that GSV does not report, such
-    /// as whether a signal is used in the navigation solution, is preserved.
+    /// Replaces the satellites of a constellation with those of a completed GSV cycle.
     fn update_sv_data(&mut self, gnss: Gnss, gsv_block: &[GsvData]) {
         // NMEA does not identify the signal, so the data is attributed to the default signal of
         // the constellation.
         let signal = GnssSignal::from(gnss);
 
-        // Parts are ordered by sentence number, so the newest report of a duplicated satellite
-        // is applied last and wins.
-        let sats_data = gsv_block
+        let sv_data = gsv_block
             .iter()
+            .rev()
             .flat_map(|part| part.sats_info.iter().flatten())
-            .map(|sat| (sat.prn() as u8, sat.snr(), sat.azimuth(), sat.elevation()))
+            .map(|satellite| {
+                let svid = satellite.prn() as u8;
+                let is_used = self
+                    .sv_data
+                    .iter()
+                    .find(|sv| sv.gnss == gnss && sv.svid == svid)
+                    .and_then(|sv| sv.signals().iter().find(|data| data.signal == signal))
+                    .is_some_and(|data| data.is_used);
+
+                let mut sv = SvData::new(gnss, svid);
+                sv.update_geometry(satellite.elevation(), satellite.azimuth());
+                sv.update_signal(signal, satellite.snr(), Some(is_used));
+                sv
+            })
             .collect::<Vec<_>>();
 
-        for (svid, cn0, azimuth, elevation) in &sats_data {
-            if let Some(sv) = self
-                .sv_data
-                .iter_mut()
-                .find(|sv| sv.gnss == gnss && sv.svid == *svid)
-            {
-                sv.update_geometry(*elevation, *azimuth);
-                sv.update_signal(signal, *cn0, None);
-            } else {
-                let mut sv = SvData::new(gnss, *svid);
-                sv.update_geometry(*elevation, *azimuth);
-                sv.update_signal(signal, *cn0, None);
+        // Replace the previous report of this constellation, leaving the others untouched.
+        self.sv_data.retain(|sv| sv.gnss != gnss);
+        self.sv_data.extend(sv_data);
 
-                self.sv_data.push(sv);
-            }
-        }
-
-        // Drop the satellites of this constellation that the cycle no longer reports, leaving
-        // the other constellations untouched.
-        self.sv_data
-            .retain(|sv| sv.gnss != gnss || sats_data.iter().any(|sat| sat.0 == sv.svid));
-
+        // The sort is stable, so the newest report of each satellite stays first and is the one
+        // kept by the deduplication.
         self.sv_data.sort_by_key(|sv| (sv.gnss, sv.svid));
+        self.sv_data.dedup_by_key(|sv| (sv.gnss, sv.svid));
     }
 }
 

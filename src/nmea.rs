@@ -131,8 +131,6 @@ impl From<nmea::sentences::GnssType> for Gnss {
 pub struct NmeaParserData {
     /// GSV cycle assemblers per constellation.
     gsv_assemblers: BTreeMap<Gnss, GsvAssembler>,
-    /// Satellites used in the navigation solution per constellation, as reported by GSA.
-    gsa_used_prns: BTreeMap<Gnss, Vec<u8>>,
 }
 
 impl App {
@@ -200,50 +198,47 @@ impl App {
             .iter_mut()
             .filter(|sv| sv.gnss == gnss)
             .for_each(|sv| sv.update_signal(signal, None, Some(used_prns.contains(&sv.svid))));
-
-        self.nmea_parser_data.gsa_used_prns.insert(gnss, used_prns);
     }
 
-    /// Replaces the satellites of a constellation with those of a completed GSV cycle.
+    /// Updates the satellites of a constellation with those of a completed GSV cycle.
+    ///
+    /// The satellites already known are updated in place, so state that GSV does not report, such
+    /// as whether a signal is used in the navigation solution, is preserved.
     fn update_sv_data(&mut self, gnss: Gnss, gsv_block: &[GsvData]) {
-        // As NMEA doesn't give information about the signal, we assume that the data is from the
-        // default signal of that GNSS
+        // NMEA does not identify the signal, so the data is attributed to the default signal of
+        // the constellation.
         let signal = GnssSignal::from(gnss);
-        // The satellite table is filled from the GSV sentences, which give information about the
-        // satellites, not about the signals themselves. A signal entry is created per satellite
-        // anyway, so the UI can work with a generic interface that also supports proprietary
-        // messages with actual per-signal data.
-        let used_prns = self.nmea_parser_data.gsa_used_prns.get(&gnss);
-        let mut sv_data = Vec::new();
 
-        // Newest sentences first, so duplicated satellites keep their latest report.
-        for part in gsv_block.iter().rev() {
-            for satellite in part.sats_info.iter().flatten() {
-                let svid = satellite.prn() as u8;
-                let mut sv = SvData::new(gnss, svid);
+        // Parts are ordered by sentence number, so the newest report of a duplicated satellite
+        // is applied last and wins.
+        let sats_data = gsv_block
+            .iter()
+            .flat_map(|part| part.sats_info.iter().flatten())
+            .map(|sat| (sat.prn() as u8, sat.snr(), sat.azimuth(), sat.elevation()))
+            .collect::<Vec<_>>();
 
-                sv.update_geometry(satellite.elevation(), satellite.azimuth());
-                sv.update_signal(signal, satellite.snr(), None);
+        for (svid, cn0, azimuth, elevation) in &sats_data {
+            if let Some(sv) = self
+                .sv_data
+                .iter_mut()
+                .find(|sv| sv.gnss == gnss && sv.svid == *svid)
+            {
+                sv.update_geometry(*elevation, *azimuth);
+                sv.update_signal(signal, *cn0, None);
+            } else {
+                let mut sv = SvData::new(gnss, *svid);
+                sv.update_geometry(*elevation, *azimuth);
+                sv.update_signal(signal, *cn0, None);
 
-                sv_data.push(sv);
+                self.sv_data.push(sv);
             }
         }
 
-        // The sort is stable, so the newest report of each satellite stays first and is the one
-        // kept by the deduplication.
-        sv_data.sort_by_key(|sv| (sv.gnss, sv.svid));
-        sv_data.dedup_by(|a, b| a.gnss == b.gnss && a.svid == b.svid);
+        // Drop the satellites of this constellation that the cycle no longer reports, leaving
+        // the other constellations untouched.
+        self.sv_data
+            .retain(|sv| sv.gnss != gnss || sats_data.iter().any(|sat| sat.0 == sv.svid));
 
-        // GSV does not report which satellites are used, so apply the last known GSA state.
-        if let Some(used_prns) = used_prns {
-            for sv in &mut sv_data {
-                sv.update_signal(signal, None, Some(used_prns.contains(&sv.svid)));
-            }
-        }
-
-        // Replace the previous report of this constellation, leaving the others untouched.
-        self.sv_data.retain(|sv| sv.gnss != gnss);
-        self.sv_data.extend(sv_data);
         self.sv_data.sort_by_key(|sv| (sv.gnss, sv.svid));
     }
 }
@@ -563,9 +558,9 @@ mod tests {
         let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
         assert_eq!(sv.elevation, Some(45.0));
         assert_eq!(sv.azimuth, Some(120.0));
-        assert_eq!(sv.signals.len(), 1);
-        assert_eq!(sv.signals[0].cn0, 45.0);
-        assert!(!sv.signals[0].is_used);
+        assert_eq!(sv.signals().len(), 1);
+        assert_eq!(sv.signals()[0].cn0, 45.0);
+        assert!(!sv.signals()[0].is_used);
 
         // Repeating the cycle updates the existing satellites instead of duplicating them.
         for part in GSV_CYCLE {
@@ -651,7 +646,7 @@ mod tests {
 
         let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
         assert_eq!(sv.elevation, Some(40.0));
-        assert_eq!(sv.signals[0].cn0, 50.0);
+        assert_eq!(sv.signals()[0].cn0, 50.0);
         assert_eq!(app.sv_data.len(), 2);
     }
 
@@ -682,7 +677,7 @@ mod tests {
         let used = app
             .sv_data
             .iter()
-            .filter(|sv| sv.signals[0].is_used)
+            .filter(|sv| sv.signals()[0].is_used)
             .map(|sv| sv.svid)
             .collect::<Vec<_>>();
         assert_eq!(used, [2, 5, 9, 12, 17, 19, 23, 28]);
@@ -693,14 +688,63 @@ mod tests {
         let used = app
             .sv_data
             .iter()
-            .filter(|sv| sv.signals[0].is_used)
+            .filter(|sv| sv.signals()[0].is_used)
             .map(|sv| sv.svid)
             .collect::<Vec<_>>();
         assert_eq!(used, [2]);
     }
 
     #[test]
-    fn gsa_received_before_gsv_is_applied_to_new_satellites() {
+    fn gsv_cycle_preserves_the_used_state_from_gsa() {
+        let mut app = app();
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+        app.update_from_gsa(&gsa(GSA));
+
+        // GSV reports the satellites again, but not whether they are used, so the state set by
+        // the last GSA must survive the cycle.
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        let used = app
+            .sv_data
+            .iter()
+            .filter(|sv| sv.signals()[0].is_used)
+            .map(|sv| sv.svid)
+            .collect::<Vec<_>>();
+        assert_eq!(used, [2, 5, 9, 12, 17, 19, 23, 28]);
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.signals()[0].cn0, 45.0);
+    }
+
+    #[test]
+    fn satellites_new_in_a_gsv_cycle_start_unused() {
+        let mut app = app();
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+        app.update_from_gsa(&gsa(GSA));
+
+        // This cycle adds PRN 15, which the last GSA did not report.
+        app.update_from_gsv(&gsv("$GPGSV,1,1,02,02,45,120,45,15,35,150,25*7B"));
+
+        let known = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert!(known.signals()[0].is_used);
+
+        let new = app.sv_data.iter().find(|sv| sv.svid == 15).unwrap();
+        assert!(!new.signals()[0].is_used);
+
+        // Satellites of the constellation that the cycle no longer reports are removed.
+        assert_eq!(app.sv_data.len(), 2);
+    }
+
+    #[test]
+    fn gsa_before_gsv_does_not_mark_new_satellites_used() {
         let mut app = app();
 
         app.update_from_gsa(&gsa(GSA));
@@ -709,13 +753,7 @@ mod tests {
             app.update_from_gsv(&gsv(part));
         }
 
-        let used = app
-            .sv_data
-            .iter()
-            .filter(|sv| sv.signals[0].is_used)
-            .map(|sv| sv.svid)
-            .collect::<Vec<_>>();
-        assert_eq!(used, [2, 5, 9, 12, 17, 19, 23, 28]);
+        assert!(app.sv_data.iter().all(|sv| !sv.signals()[0].is_used));
     }
 
     struct TimeoutReader;

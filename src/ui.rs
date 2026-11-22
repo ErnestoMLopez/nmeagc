@@ -339,7 +339,7 @@ impl<'a> From<&App> for Skyplot<'a> {
             .sv_data
             .iter()
             .filter_map(|sv| match (sv.elevation, sv.azimuth) {
-                (Some(elevation), Some(azimuth)) if !sv.signals.is_empty() => Some(
+                (Some(elevation), Some(azimuth)) if !sv.signals().is_empty() => Some(
                     SkyplotSatellite::new(sv.gnss, sv.svid, elevation as f64, azimuth as f64),
                 ),
                 _ => None,
@@ -356,7 +356,7 @@ impl<'a> From<&App> for SignalsMonitor<'a> {
             .sv_data
             .iter()
             .flat_map(|sv| {
-                sv.signals.iter().map(|signal| {
+                sv.signals().iter().map(|signal| {
                     SignalInfo::new(signal.signal, sv.svid, signal.cn0 as u8, signal.is_used)
                 })
             })

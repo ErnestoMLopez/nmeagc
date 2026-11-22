@@ -177,7 +177,7 @@ pub struct SvData {
     /// Frequency channel number (for GLONASS)
     pub channel: Option<i8>,
     /// Signal data for the space vehicle
-    pub signals: Vec<SignalData>,
+    signals: Vec<SignalData>,
     /// Elevation [degrees]
     pub elevation: Option<f32>,
     /// Azimuth [degrees]
@@ -203,9 +203,13 @@ impl SvData {
         self.azimuth = azimuth;
     }
 
+    /// Returns the signals tracked for the satellite.
+    pub fn signals(&self) -> &[SignalData] {
+        &self.signals
+    }
+
     /// Updates a signal observation, adding the signal if it is not tracked yet.
     ///
-    /// When no signal identifier is given, the default signal of the constellation is used.
     /// Fields that are `None` keep their current value.
     pub fn update_signal(&mut self, signal: GnssSignal, cn0: Option<f32>, is_used: Option<bool>) {
         if let Some(data) = self.signals.iter_mut().find(|data| data.signal == signal) {
@@ -342,10 +346,10 @@ mod tests {
 
         assert_eq!(sv.elevation, Some(45.0));
         assert_eq!(sv.azimuth, Some(120.0));
-        assert_eq!(sv.signals.len(), 2);
+        assert_eq!(sv.signals().len(), 2);
 
         let l1ca = sv
-            .signals
+            .signals()
             .iter()
             .find(|signal| signal.signal == GnssSignal::Gps(GpsSignal::L1CA))
             .unwrap();
@@ -355,7 +359,7 @@ mod tests {
         // Fields that are not provided keep their current value.
         sv.update_signal(GnssSignal::Gps(GpsSignal::L1CA), None, Some(false));
         let l1ca = sv
-            .signals
+            .signals()
             .iter()
             .find(|signal| signal.signal == GnssSignal::Gps(GpsSignal::L1CA))
             .unwrap();
@@ -368,9 +372,9 @@ mod tests {
         let mut sv = SvData::new(Gnss::Glonass, 3);
         sv.update_signal(GnssSignal::from(Gnss::Glonass), Some(25.0), Some(true));
 
-        assert_eq!(sv.signals.len(), 1);
-        assert_eq!(sv.signals[0].signal, GnssSignal::from(Gnss::Glonass));
-        assert_eq!(sv.signals[0].cn0, 25.0);
-        assert!(sv.signals[0].is_used);
+        assert_eq!(sv.signals().len(), 1);
+        assert_eq!(sv.signals()[0].signal, GnssSignal::from(Gnss::Glonass));
+        assert_eq!(sv.signals()[0].cn0, 25.0);
+        assert!(sv.signals()[0].is_used);
     }
 }

@@ -3,8 +3,8 @@ use std::io::{BufReader, BufWriter, Read, Write};
 use std::net::TcpStream;
 use std::panic::{self, AssertUnwindSafe};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 
 use circular_buffer::FixedCircularBuffer;
@@ -14,14 +14,13 @@ use crossterm::event::{
     Event as CrosstermEvent, KeyCode, KeyEvent, KeyModifiers, MouseEvent, MouseEventKind,
 };
 use log::info;
-use nmea::{Nmea, SentenceType};
 use ratatui::DefaultTerminal;
 use strum::{Display, EnumIter, FromRepr};
 
 use crate::cli::{Cli, DataSource};
 use crate::event::{Event, EventHandler, EventThread, run_tui_handler};
 use crate::gnss::{NavigationData, SvData};
-use crate::nmea::{RawNmeaLog, run_nmea_handler};
+use crate::nmea::{NmeaGnssMessage, NmeaParserData, RawNmeaLog, run_nmea_handler};
 use crate::setup::{AppSetup, SetupAction};
 
 /// Maximum amount of NMEA sentences to store and render in the raw data tab
@@ -41,14 +40,14 @@ pub struct App {
     pub event_handler: EventHandler,
     /// Current tab.
     pub tab: AppTab,
-    /// Last navigation solution available
+    /// Last navigation solution available.
     pub nav_data: NavigationData,
     /// GNSS data table.
     pub sv_data: Vec<SvData>,
+    /// State accumulated while parsing the NMEA sentences.
+    pub nmea_parser_data: NmeaParserData,
     /// Raw NMEA data logs.
     pub raw_data: FixedCircularBuffer<RawNmeaLog, MAX_RAW_NMEA_LOGS>,
-    /// NMEA parser and data (shared between the event handler and the application).
-    pub nmea_data: Arc<Mutex<Nmea>>,
     /// Selected NMEA data source.
     input_source: DataSource,
     /// Output file to write validated received messages
@@ -71,8 +70,8 @@ impl App {
             tab: AppTab::default(),
             nav_data: NavigationData::default(),
             sv_data: Vec::new(),
+            nmea_parser_data: NmeaParserData::default(),
             raw_data: FixedCircularBuffer::<RawNmeaLog, MAX_RAW_NMEA_LOGS>::new(),
-            nmea_data: Arc::new(Mutex::new(Nmea::default())),
             input_source: args.source.unwrap_or_default(),
             output_file: args.output,
             output_writer: None,
@@ -118,7 +117,7 @@ impl App {
             Event::App(app_event) => match app_event {
                 AppEvent::Quit => self.quit(),
                 AppEvent::SetupReady => self.setup()?,
-                AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(msg)?,
+                AppEvent::NmeaMessage(msg) => self.handle_nmea_msg(&msg)?,
                 AppEvent::RawNmeaSentence(raw) => self.handle_raw_nmea(raw)?,
             },
             Event::WorkerError => self.quit(),
@@ -181,15 +180,14 @@ impl App {
         Ok(())
     }
 
-    fn handle_nmea_msg(&mut self, nmea_msg: SentenceType) -> Result<()> {
+    fn handle_nmea_msg(&mut self, nmea_msg: &NmeaGnssMessage) -> Result<()> {
         match nmea_msg {
-            SentenceType::GGA => self.update_from_gga(),
-            SentenceType::RMC => self.update_from_rmc(),
-            SentenceType::GNS => {}
-            SentenceType::GSA => {}
-            SentenceType::GSV => self.update_from_gsv(),
-            SentenceType::GLL => {}
-            _ => {}
+            NmeaGnssMessage::Gga(gga) => self.update_from_gga(gga),
+            NmeaGnssMessage::Rmc(rmc) => self.update_from_rmc(rmc),
+            NmeaGnssMessage::Gns(_) => {}
+            NmeaGnssMessage::Gsa(gsa) => self.update_from_gsa(gsa),
+            NmeaGnssMessage::Gsv(gsv) => self.update_from_gsv(gsv),
+            NmeaGnssMessage::Gll(_) => {}
         }
         Ok(())
     }
@@ -258,10 +256,9 @@ impl App {
         }
 
         let reader = BufReader::new(input);
-        let parser = Arc::clone(&self.nmea_data);
 
         self.spawn_worker("NMEA reader", move |actor, running| {
-            run_nmea_handler(actor, running, reader, parser)
+            run_nmea_handler(actor, running, reader)
         });
 
         Ok(())
@@ -361,14 +358,14 @@ impl Drop for App {
 }
 
 /// Application events.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub enum AppEvent {
     /// Quit the application.
     Quit,
     /// Application setup finished (via CLI or interactive setup).
     SetupReady,
     /// NMEA message received.
-    NmeaMessage(SentenceType),
+    NmeaMessage(Box<NmeaGnssMessage>),
     /// Raw NMEA sentence for raw data logging.
     RawNmeaSentence(RawNmeaLog),
 }

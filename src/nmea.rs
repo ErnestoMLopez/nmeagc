@@ -1,15 +1,88 @@
+use std::collections::BTreeMap;
 use std::io::{self, BufRead};
+use std::mem;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
 
 use color_eyre::Result;
 use color_eyre::eyre::WrapErr;
 use log::debug;
-use nmea::{Nmea, SentenceType};
+use nmea::ParseResult;
+use nmea::sentences::{GgaData, GllData, GnsData, GsaData, GsvData, RmcData};
 
 use crate::app::{App, AppEvent};
 use crate::event::{Event, EventThread};
-use crate::gnss::{Gnss, GnssSignal, SignalData, SvData};
+use crate::gnss::{Gnss, GnssSignal, SolutionType, SvData};
+
+/// NMEA messages relevant to the application, already parsed from their raw sentence.
+#[derive(Debug)]
+pub enum NmeaGnssMessage {
+    Gga(GgaData),
+    Rmc(RmcData),
+    Gns(GnsData),
+    Gsa(GsaData),
+    Gsv(GsvData),
+    Gll(GllData),
+}
+
+impl TryFrom<ParseResult> for NmeaGnssMessage {
+    type Error = ();
+    fn try_from(result: ParseResult) -> Result<Self, Self::Error> {
+        match result {
+            ParseResult::GGA(data) => Ok(Self::Gga(data)),
+            ParseResult::RMC(data) => Ok(Self::Rmc(data)),
+            ParseResult::GNS(data) => Ok(Self::Gns(data)),
+            ParseResult::GSA(data) => Ok(Self::Gsa(data)),
+            ParseResult::GSV(data) => Ok(Self::Gsv(data)),
+            ParseResult::GLL(data) => Ok(Self::Gll(data)),
+            _ => Err(()),
+        }
+    }
+}
+
+/// GSV cycle being assembled for a constellation.
+#[derive(Debug, Default)]
+pub struct GsvAssembler {
+    /// Parts of the cycle being assembled, keyed by sentence number.
+    pending: BTreeMap<u16, GsvData>,
+    /// Number of sentences expected in the cycle being assembled.
+    expected: u16,
+}
+
+impl GsvAssembler {
+    /// Adds a part received from a GSV sentence.
+    ///
+    /// The sentences of a cycle describe the satellites at the same instant, so parts from
+    /// different cycles must not be combined. The cycle is committed only once all its parts have
+    /// been received; an incomplete cycle is discarded when the next one starts.
+    fn push(&mut self, part: GsvData) {
+        if part.sentence_num == 0 || part.sentence_num > part.number_of_sentences {
+            return;
+        }
+
+        if part.sentence_num == 1 {
+            self.pending.clear();
+            self.expected = part.number_of_sentences;
+        } else if self.pending.is_empty() || part.number_of_sentences != self.expected {
+            // Without the first sentence there is no way to tell which cycle the part belongs
+            // to, and a cycle with a different number of sentences cannot be mixed with the one
+            // being assembled.
+            return;
+        }
+
+        self.pending.insert(part.sentence_num, part);
+    }
+
+    /// Returns the parts of the cycle being assembled, ordered by sentence number, once all of
+    /// them have been received.
+    fn try_assemble(&mut self) -> Option<Vec<GsvData>> {
+        if !self.pending.is_empty() && self.pending.len() == usize::from(self.expected) {
+            Some(mem::take(&mut self.pending).into_values().collect())
+        } else {
+            None
+        }
+    }
+}
 
 #[derive(Clone, Debug)]
 pub struct RawNmeaLog {
@@ -23,22 +96,6 @@ pub enum RawNmeaStatus {
     Unimplemented,
     Other,
     Error,
-}
-
-/// Solution type indicator
-#[derive(Clone, Copy, Debug, PartialEq, Default)]
-pub enum SolutionType {
-    #[default]
-    Invalid,
-    Sps2D,
-    Sps3D,
-    Pps,
-    RtkFixed,
-    RtkFloat,
-    Differential,
-    Extrapolated,
-    Manual,
-    Simulated,
 }
 
 impl From<nmea::sentences::FixType> for SolutionType {
@@ -69,63 +126,114 @@ impl From<nmea::sentences::GnssType> for Gnss {
     }
 }
 
-impl App {
-    pub fn update_from_gga(&mut self) {
-        let nmea_data = self.nmea_data.lock().expect("mutex poisoned");
-        let nav_data = &mut self.nav_data;
+/// State accumulated from the received NMEA sentences that is needed to interpret them.
+#[derive(Debug, Default)]
+pub struct NmeaParserData {
+    /// GSV cycle assemblers per constellation.
+    gsv_assemblers: BTreeMap<Gnss, GsvAssembler>,
+}
 
-        nav_data.solution_type = nmea_data
+impl App {
+    pub fn update_from_gga(&mut self, gga: &GgaData) {
+        let solution_type = gga
             .fix_type
             .map_or(SolutionType::Invalid, SolutionType::from);
-        // GGA carries the time of day only. The date is taken from the last RMC sentence
-        // merged into the parser, so the timestamp is only available once both are known.
-        nav_data.time = nmea_data
-            .fix_date
-            .zip(nmea_data.fix_time)
-            .map(|(date, time)| date.and_time(time).and_utc());
-        nav_data.latitude = nmea_data.latitude;
-        nav_data.longitude = nmea_data.longitude;
-        nav_data.altitude = nmea_data.altitude.map(f64::from);
-        nav_data.geoid_separation = nmea_data.geoid_separation.map(f64::from);
-        nav_data.svs_used = nmea_data
-            .num_of_fix_satellites
+        let svs_used = gga
+            .fix_satellites
             .map_or(0, |svs| u8::try_from(svs).unwrap_or(u8::MAX));
+
+        self.nav_data.update_solution(solution_type, svs_used);
+        self.nav_data.update_time_of_day(gga.fix_time);
+        self.nav_data.update_position(gga.latitude, gga.longitude);
+        self.nav_data.update_altitude(
+            gga.altitude.map(f64::from),
+            gga.geoid_separation.map(f64::from),
+        );
     }
 
-    pub fn update_from_rmc(&mut self) {
-        // TODO
+    pub fn update_from_rmc(&mut self, rmc: &RmcData) {
+        let time = rmc
+            .fix_date
+            .zip(rmc.fix_time)
+            .map(|(date, time)| date.and_time(time).and_utc());
+
+        self.nav_data.update_time(time);
+        self.nav_data.update_position(rmc.lat, rmc.lon);
     }
 
-    pub fn update_from_gsv(&mut self) {
-        let nmea_data = self.nmea_data.lock().expect("mutex posioned");
+    pub fn update_from_gsv(&mut self, gsv: &GsvData) {
+        let gnss: Gnss = gsv.gnss_type.into();
+        let gsv_assembler = self
+            .nmea_parser_data
+            .gsv_assemblers
+            .entry(gnss)
+            .or_default();
 
-        let nmea_sv_data = nmea_data.satellites();
-        let sv_data = &mut self.sv_data;
+        gsv_assembler.push(gsv.clone());
 
-        // El llenado de la tabla de datos de satélites y de señales de cada satélite se hace a
-        // partir de los datos de las sentencias GSV, las cuales dan información solamente de los
-        // satélites, no de las señales en sí. Esto parece una copia inútil e ineficiente de
-        // información, pero está pensado para que la intefaz a la que acceda la UI sea lo más
-        // genérica posible, y permita su uso en clientes para mensajes propietarios que sí posean
-        // información adicional de cada señal.
+        if let Some(gsv_block) = gsv_assembler.try_assemble() {
+            self.update_sv_data(gnss, &gsv_block);
+        }
+    }
 
-        sv_data.clear();
-        sv_data.extend(nmea_sv_data.iter().map(|satellite| {
-            let gnss: Gnss = satellite.gnss_type().into();
-            SvData {
-                gnss,
-                svid: satellite.prn() as u8,
-                channel: None,
-                signals: vec![SignalData {
-                    signal: GnssSignal::from(gnss),
-                    cn0: satellite.snr().unwrap_or_default(),
-                    is_active: true,
-                    is_used: true,
-                }],
-                elevation: satellite.elevation(),
-                azimuth: satellite.azimuth(),
-            }
-        }));
+    pub fn update_from_gsa(&mut self, gsa: &GsaData) {
+        // GN-talker receivers may omit the system ID, making the PRNs ambiguous across
+        // constellations, so they cannot be attributed to any of them.
+        let Some(system_id) = gsa.system_id else {
+            return;
+        };
+
+        let gnss = Gnss::from(nmea::sentences::GnssType::from(system_id));
+        let signal = GnssSignal::from(gnss);
+
+        // Each GSA sentence reports the satellites used for one constellation during the current
+        // epoch, so a new sentence for the same constellation replaces the previous set.
+        let used_prns = gsa
+            .fix_sats_prn
+            .iter()
+            .filter_map(|prn| u8::try_from(*prn).ok())
+            .collect::<Vec<_>>();
+
+        self.sv_data
+            .iter_mut()
+            .filter(|sv| sv.gnss == gnss)
+            .for_each(|sv| sv.update_signal(signal, None, Some(used_prns.contains(&sv.svid))));
+    }
+
+    /// Replaces the satellites of a constellation with those of a completed GSV cycle.
+    fn update_sv_data(&mut self, gnss: Gnss, gsv_block: &[GsvData]) {
+        // NMEA does not identify the signal, so the data is attributed to the default signal of
+        // the constellation.
+        let signal = GnssSignal::from(gnss);
+
+        let sv_data = gsv_block
+            .iter()
+            .rev()
+            .flat_map(|part| part.sats_info.iter().flatten())
+            .map(|satellite| {
+                let svid = satellite.prn() as u8;
+                let is_used = self
+                    .sv_data
+                    .iter()
+                    .find(|sv| sv.gnss == gnss && sv.svid == svid)
+                    .and_then(|sv| sv.signals().iter().find(|data| data.signal == signal))
+                    .is_some_and(|data| data.is_used);
+
+                let mut sv = SvData::new(gnss, svid);
+                sv.update_geometry(satellite.elevation(), satellite.azimuth());
+                sv.update_signal(signal, satellite.snr(), Some(is_used));
+                sv
+            })
+            .collect::<Vec<_>>();
+
+        // Replace the previous report of this constellation, leaving the others untouched.
+        self.sv_data.retain(|sv| sv.gnss != gnss);
+        self.sv_data.extend(sv_data);
+
+        // The sort is stable, so the newest report of each satellite stays first and is the one
+        // kept by the deduplication.
+        self.sv_data.sort_by_key(|sv| (sv.gnss, sv.svid));
+        self.sv_data.dedup_by_key(|sv| (sv.gnss, sv.svid));
     }
 }
 
@@ -136,7 +244,6 @@ pub fn run_nmea_handler<R: BufRead>(
     actor: EventThread,
     app_running: Arc<AtomicBool>,
     mut reader: R,
-    parser: Arc<Mutex<Nmea>>,
 ) -> Result<()> {
     let mut line = Vec::new();
 
@@ -152,33 +259,25 @@ pub fn run_nmea_handler<R: BufRead>(
                     std::str::from_utf8(&line).wrap_err("Error decoding NMEA sentence")?;
                 let sentence = sentence.strip_suffix("\r\n").unwrap_or(sentence);
 
-                let mut nmea_parser = parser.lock().expect("mutex poisoned");
+                let parsed = nmea::parse_str(sentence);
 
-                let raw_status = match nmea_parser.parse(sentence) {
-                    Ok(sentence_type) => {
-                        actor.send(Event::App(AppEvent::NmeaMessage(sentence_type)));
-                        match sentence_type {
-                            SentenceType::GGA
-                            | SentenceType::RMC
-                            | SentenceType::GNS
-                            | SentenceType::GSA
-                            | SentenceType::GSV
-                            | SentenceType::GLL => RawNmeaStatus::Gnss,
-                            _ => RawNmeaStatus::Other,
-                        }
+                let raw_status = match &parsed {
+                    Ok(ParseResult::GGA(_))
+                    | Ok(ParseResult::RMC(_))
+                    | Ok(ParseResult::GSA(_))
+                    | Ok(ParseResult::GSV(_)) => RawNmeaStatus::Gnss,
+                    Ok(ParseResult::GNS(_)) | Ok(ParseResult::GLL(_)) | Ok(ParseResult::GST(_)) => {
+                        RawNmeaStatus::Unimplemented
                     }
-                    Err(err) => {
-                        // Atajamos las sentencias que nos interesarían pero no son soportados por
-                        // la crate nmea. Los marcamos como tales, y al resto como no importantes.
-                        match err {
-                            nmea::Error::Unsupported(SentenceType::GST) => {
-                                RawNmeaStatus::Unimplemented
-                            }
-                            nmea::Error::Unsupported(_) => RawNmeaStatus::Other,
-                            _ => RawNmeaStatus::Error,
-                        }
-                    }
+                    Ok(_) => RawNmeaStatus::Other,
+                    Err(_) => RawNmeaStatus::Error,
                 };
+
+                if let Ok(result) = parsed
+                    && let Ok(message) = NmeaGnssMessage::try_from(result)
+                {
+                    actor.send(Event::App(AppEvent::NmeaMessage(Box::new(message))));
+                }
 
                 let nmea_log = RawNmeaLog {
                     sentence: sentence.to_string(),
@@ -348,26 +447,51 @@ mod tests {
 
     const RMC: &str = "$GPRMC,092750.000,A,5321.6802,N,00630.3372,W,0.02,31.66,280511,,,A*43";
     const GGA: &str = "$GPGGA,092750.000,5321.6802,N,00630.3372,W,1,8,1.03,61.7,M,55.2,M,,*76";
+    const GSA: &str = "$GPGSA,A,3,02,05,09,12,17,19,23,28,,,,,1.5,0.9,1.2*34";
+    const GSV_CYCLE: [&str; 3] = [
+        "$GPGSV,3,1,10,2,45,120,45,5,30,250,40,9,60,300,42,12,15,180,35*4C",
+        "$GPGSV,3,2,10,17,25,45,38,19,50,210,44,23,10,315,30,28,40,90,41*7A",
+        "$GPGSV,3,3,10,31,20,270,39,32,35,150,37*70",
+    ];
 
-    fn app_with_parser(sentences: &[&str]) -> App {
+    fn app() -> App {
         let args = Cli::try_parse_from(["nmeagc", "-i"]).unwrap();
-        let app = App::new(args);
+        App::new(args)
+    }
 
-        {
-            let mut parser = app.nmea_data.lock().unwrap();
-            for sentence in sentences {
-                parser.parse(sentence).unwrap();
-            }
+    fn gga(sentence: &str) -> GgaData {
+        match nmea::parse_str(sentence).unwrap() {
+            ParseResult::GGA(data) => data,
+            _ => unreachable!("expected a GGA sentence"),
         }
+    }
 
-        app
+    fn rmc(sentence: &str) -> RmcData {
+        match nmea::parse_str(sentence).unwrap() {
+            ParseResult::RMC(data) => data,
+            _ => unreachable!("expected an RMC sentence"),
+        }
+    }
+
+    fn gsa(sentence: &str) -> GsaData {
+        match nmea::parse_str(sentence).unwrap() {
+            ParseResult::GSA(data) => data,
+            _ => unreachable!("expected a GSA sentence"),
+        }
+    }
+
+    fn gsv(sentence: &str) -> GsvData {
+        match nmea::parse_str(sentence).unwrap() {
+            ParseResult::GSV(data) => data,
+            _ => unreachable!("expected a GSV sentence"),
+        }
     }
 
     #[test]
     fn gga_updates_navigation_data() {
-        let mut app = app_with_parser(&[GGA]);
+        let mut app = app();
 
-        app.update_from_gga();
+        app.update_from_gga(&gga(GGA));
 
         let latitude = app.nav_data.latitude.unwrap();
         let longitude = app.nav_data.longitude.unwrap();
@@ -384,9 +508,10 @@ mod tests {
 
     #[test]
     fn gga_time_uses_date_from_last_rmc() {
-        let mut app = app_with_parser(&[RMC, GGA]);
+        let mut app = app();
 
-        app.update_from_gga();
+        app.update_from_rmc(&rmc(RMC));
+        app.update_from_gga(&gga(GGA));
 
         let expected = NaiveDate::from_ymd_opt(2011, 5, 28)
             .unwrap()
@@ -395,6 +520,234 @@ mod tests {
             .and_utc();
 
         assert_eq!(app.nav_data.time, Some(expected));
+    }
+
+    #[test]
+    fn gsv_parts_are_accumulated_and_deduplicated() {
+        let mut app = app();
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        let svids = app
+            .sv_data
+            .iter()
+            .map(|sv| (sv.gnss, sv.svid))
+            .collect::<Vec<_>>();
+        let expected = [
+            (Gnss::Gps, 2),
+            (Gnss::Gps, 5),
+            (Gnss::Gps, 9),
+            (Gnss::Gps, 12),
+            (Gnss::Gps, 17),
+            (Gnss::Gps, 19),
+            (Gnss::Gps, 23),
+            (Gnss::Gps, 28),
+            (Gnss::Gps, 31),
+            (Gnss::Gps, 32),
+        ];
+        assert_eq!(svids, expected);
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.elevation, Some(45.0));
+        assert_eq!(sv.azimuth, Some(120.0));
+        assert_eq!(sv.signals().len(), 1);
+        assert_eq!(sv.signals()[0].cn0, 45.0);
+        assert!(!sv.signals()[0].is_used);
+
+        // Repeating the cycle updates the existing satellites instead of duplicating them.
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+        assert_eq!(app.sv_data.len(), expected.len());
+    }
+
+    #[test]
+    fn old_gsv_cycle_is_dropped() {
+        let mut app = app();
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        for part in [
+            "$GPGSV,3,1,03,01,10,100,30*4A",
+            "$GPGSV,3,2,03,02,20,200,31*4B",
+            "$GPGSV,3,3,03,03,30,300,32*48",
+        ] {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        let svids = app.sv_data.iter().map(|sv| sv.svid).collect::<Vec<_>>();
+        assert_eq!(svids, [1, 2, 3]);
+    }
+
+    #[test]
+    fn incomplete_gsv_cycle_does_not_mix_with_previous_data() {
+        let mut app = app();
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        // A cycle with a missing part is discarded instead of being combined with the previous
+        // complete one, so the previous satellites remain visible.
+        app.update_from_gsv(&gsv("$GPGSV,3,1,03,01,10,100,30*4A"));
+        app.update_from_gsv(&gsv("$GPGSV,3,3,03,03,30,300,32*48"));
+
+        let svids = app.sv_data.iter().map(|sv| sv.svid).collect::<Vec<_>>();
+        assert_eq!(svids, [2, 5, 9, 12, 17, 19, 23, 28, 31, 32]);
+
+        // Once the missing part arrives, the new cycle replaces the previous data as a whole.
+        app.update_from_gsv(&gsv("$GPGSV,3,2,03,02,20,200,31*4B"));
+
+        let svids = app.sv_data.iter().map(|sv| sv.svid).collect::<Vec<_>>();
+        assert_eq!(svids, [1, 2, 3]);
+    }
+
+    #[test]
+    fn gsv_parts_without_a_cycle_start_are_ignored() {
+        let mut app = app();
+
+        // This part cannot be attributed to any cycle because its first sentence was not seen.
+        app.update_from_gsv(&gsv("$GPGSV,3,2,03,02,20,200,31*4B"));
+        assert!(app.sv_data.is_empty());
+
+        for part in [
+            "$GPGSV,3,1,03,01,10,100,30*4A",
+            "$GPGSV,3,2,03,02,20,200,31*4B",
+            "$GPGSV,3,3,03,03,30,300,32*48",
+        ] {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        let svids = app.sv_data.iter().map(|sv| sv.svid).collect::<Vec<_>>();
+        assert_eq!(svids, [1, 2, 3]);
+    }
+
+    #[test]
+    fn duplicated_satellite_keeps_the_newest_report() {
+        let mut app = app();
+
+        // PRN 02 appears in both parts of the cycle; the one from the later sentence wins.
+        for part in [
+            "$GPGSV,2,1,02,02,10,100,20,05,20,200,30*7E",
+            "$GPGSV,2,2,02,02,40,400,50*4C",
+        ] {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.elevation, Some(40.0));
+        assert_eq!(sv.signals()[0].cn0, 50.0);
+        assert_eq!(app.sv_data.len(), 2);
+    }
+
+    #[test]
+    fn satellites_with_the_same_svid_in_different_constellations_are_kept() {
+        let mut app = app();
+
+        app.update_from_gsv(&gsv("$GPGSV,1,1,01,02,20,200,30*49"));
+        app.update_from_gsv(&gsv("$GLGSV,1,1,01,02,20,200,30*55"));
+
+        let satellites = app
+            .sv_data
+            .iter()
+            .map(|sv| (sv.gnss, sv.svid))
+            .collect::<Vec<_>>();
+        assert_eq!(satellites, [(Gnss::Gps, 2), (Gnss::Glonass, 2)]);
+    }
+
+    #[test]
+    fn gsa_marks_the_satellites_used_in_the_solution() {
+        let mut app = app();
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+        app.update_from_gsa(&gsa(GSA));
+
+        let used = app
+            .sv_data
+            .iter()
+            .filter(|sv| sv.signals()[0].is_used)
+            .map(|sv| sv.svid)
+            .collect::<Vec<_>>();
+        assert_eq!(used, [2, 5, 9, 12, 17, 19, 23, 28]);
+
+        // A new GSA for the same constellation replaces the previous used set.
+        app.update_from_gsa(&gsa("$GPGSA,A,3,02,,,,,,,,,,,,1.5,0.9,1.2*3E"));
+
+        let used = app
+            .sv_data
+            .iter()
+            .filter(|sv| sv.signals()[0].is_used)
+            .map(|sv| sv.svid)
+            .collect::<Vec<_>>();
+        assert_eq!(used, [2]);
+    }
+
+    #[test]
+    fn gsv_cycle_preserves_the_used_state_from_gsa() {
+        let mut app = app();
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+        app.update_from_gsa(&gsa(GSA));
+
+        // GSV reports the satellites again, but not whether they are used, so the state set by
+        // the last GSA must survive the cycle.
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        let used = app
+            .sv_data
+            .iter()
+            .filter(|sv| sv.signals()[0].is_used)
+            .map(|sv| sv.svid)
+            .collect::<Vec<_>>();
+        assert_eq!(used, [2, 5, 9, 12, 17, 19, 23, 28]);
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.signals()[0].cn0, 45.0);
+    }
+
+    #[test]
+    fn satellites_new_in_a_gsv_cycle_start_unused() {
+        let mut app = app();
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+        app.update_from_gsa(&gsa(GSA));
+
+        // This cycle adds PRN 15, which the last GSA did not report.
+        app.update_from_gsv(&gsv("$GPGSV,1,1,02,02,45,120,45,15,35,150,25*7B"));
+
+        let known = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert!(known.signals()[0].is_used);
+
+        let new = app.sv_data.iter().find(|sv| sv.svid == 15).unwrap();
+        assert!(!new.signals()[0].is_used);
+
+        // Satellites of the constellation that the cycle no longer reports are removed.
+        assert_eq!(app.sv_data.len(), 2);
+    }
+
+    #[test]
+    fn gsa_before_gsv_does_not_mark_new_satellites_used() {
+        let mut app = app();
+
+        app.update_from_gsa(&gsa(GSA));
+
+        for part in GSV_CYCLE {
+            app.update_from_gsv(&gsv(part));
+        }
+
+        assert!(app.sv_data.iter().all(|sv| !sv.signals()[0].is_used));
     }
 
     struct TimeoutReader;
@@ -426,12 +779,10 @@ mod tests {
     fn handler_exits_after_shutdown_when_reader_times_out() {
         let (sender, _receiver) = mpsc::channel();
         let actor = EventThread::new(sender);
-        let parser = Arc::new(Mutex::new(Nmea::default()));
         let running = Arc::new(AtomicBool::new(true));
         let worker_running = Arc::clone(&running);
 
-        let handle =
-            thread::spawn(move || run_nmea_handler(actor, worker_running, TimeoutReader, parser));
+        let handle = thread::spawn(move || run_nmea_handler(actor, worker_running, TimeoutReader));
 
         thread::sleep(Duration::from_millis(50));
         running.store(false, Ordering::Relaxed);

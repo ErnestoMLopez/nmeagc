@@ -152,10 +152,7 @@ fn render_map_tab(app: &App, frame: &mut Frame, area: Rect) {
 
     let block = Block::bordered().title("Navigation").style(THEME.borders);
 
-    let coordinates = {
-        let nmea_parser = app.nmea_data.lock().expect("mutex poisoned");
-        nmea_parser.longitude.zip(nmea_parser.latitude)
-    };
+    let coordinates = app.nav_data.longitude.zip(app.nav_data.latitude);
 
     let map = Canvas::default()
         .block(Block::bordered().title("Worldmap").style(THEME.borders))
@@ -342,7 +339,7 @@ impl<'a> From<&App> for Skyplot<'a> {
             .sv_data
             .iter()
             .filter_map(|sv| match (sv.elevation, sv.azimuth) {
-                (Some(elevation), Some(azimuth)) if !sv.signals.is_empty() => Some(
+                (Some(elevation), Some(azimuth)) if !sv.signals().is_empty() => Some(
                     SkyplotSatellite::new(sv.gnss, sv.svid, elevation as f64, azimuth as f64),
                 ),
                 _ => None,
@@ -359,7 +356,7 @@ impl<'a> From<&App> for SignalsMonitor<'a> {
             .sv_data
             .iter()
             .flat_map(|sv| {
-                sv.signals.iter().map(|signal| {
+                sv.signals().iter().map(|signal| {
                     SignalInfo::new(signal.signal, sv.svid, signal.cn0 as u8, signal.is_used)
                 })
             })

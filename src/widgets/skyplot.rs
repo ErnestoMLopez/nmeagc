@@ -2,12 +2,13 @@ use ratatui::buffer::Buffer;
 use ratatui::layout::{Constraint, Layout, Position, Rect};
 use ratatui::style::{Color, Style, Stylize};
 use ratatui::symbols::Marker;
-use ratatui::widgets::canvas::{Canvas, Circle, Context, Line, Painter, Shape};
+use ratatui::text::{Line, Span, Text};
+use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, Painter, Shape};
 use ratatui::widgets::{
     Block, BlockExt, BorderType, Borders, Cell, Paragraph, Row, Table, Widget, Wrap,
 };
 
-use crate::gnss::Gnss;
+use crate::gnss::{Gnss, SvData};
 
 pub struct Skyplot<'a> {
     satellites: Vec<SkyplotSatellite>,
@@ -21,15 +22,54 @@ pub struct SkyplotSatellite {
     svid: u8,
     elevation: f64,
     azimuth: f64,
+    state: SatelliteState,
 }
 
-impl SkyplotSatellite {
-    pub fn new(gnss: Gnss, svid: u8, elevation: f64, azimuth: f64) -> Self {
-        Self {
-            gnss,
-            svid,
-            elevation,
-            azimuth,
+impl TryFrom<&SvData> for SkyplotSatellite {
+    type Error = ();
+
+    fn try_from(sv: &SvData) -> Result<Self, Self::Error> {
+        let elevation = sv.elevation.ok_or(())?;
+        let azimuth = sv.azimuth.ok_or(())?;
+
+        Ok(Self {
+            gnss: sv.gnss,
+            svid: sv.svid,
+            elevation: elevation as f64,
+            azimuth: azimuth as f64,
+            state: SatelliteState::from(sv),
+        })
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum SatelliteState {
+    /// The satellite is in view, but no signal is being tracked.
+    Visible,
+    /// At least one signal is tracked, but none is used in the navigation solution.
+    Tracked,
+    /// At least one tracked signal is used in the navigation solution.
+    Used,
+}
+
+impl SatelliteState {
+    const fn marker(self) -> Marker {
+        match self {
+            Self::Visible => Marker::Dot,
+            Self::Tracked => Marker::Custom('o'),
+            Self::Used => Marker::HalfBlock,
+        }
+    }
+}
+
+impl From<&SvData> for SatelliteState {
+    fn from(sv: &SvData) -> Self {
+        if sv.signals().iter().any(|signal| signal.is_used) {
+            Self::Used
+        } else if !sv.signals().is_empty() {
+            Self::Tracked
+        } else {
+            Self::Visible
         }
     }
 }
@@ -38,11 +78,12 @@ struct PlotableSv {
     color: Color,
     x: f64,
     y: f64,
+    state: SatelliteState,
 }
 
 impl PlotableSv {
-    fn new(color: Color, x: f64, y: f64) -> Self {
-        PlotableSv { color, x, y }
+    fn new(color: Color, x: f64, y: f64, state: SatelliteState) -> Self {
+        PlotableSv { color, x, y, state }
     }
 }
 
@@ -74,7 +115,7 @@ impl<'a> Widget for Skyplot<'a> {
                 let x = radius * azimuth_rad.sin();
                 let y = radius * azimuth_rad.cos();
 
-                PlotableSv::new(Color::from(satellite.gnss), x, y)
+                PlotableSv::new(Color::from(satellite.gnss), x, y, satellite.state)
             })
             .collect();
 
@@ -114,10 +155,7 @@ impl<'a> Widget for Skyplot<'a> {
                 .style(self.style);
             Widget::render(table, info_area, buf);
         } else {
-            Block::new()
-                .border_type(BorderType::LightDoubleDashed)
-                .borders(Borders::TOP)
-                .render(info_area, buf);
+            Self::render_legend(info_area, buf);
         }
     }
 }
@@ -173,8 +211,8 @@ impl<'a> Skyplot<'a> {
         for radius in [1.0, 0.67, 0.33] {
             ctx.draw(&Circle::new(0.0, 0.0, radius, Color::DarkGray));
         }
-        ctx.draw(&Line::new(-1.0, 0.0, 1.0, 0.0, Color::DarkGray));
-        ctx.draw(&Line::new(0.0, -1.0, 0.0, 1.0, Color::DarkGray));
+        ctx.draw(&CanvasLine::new(-1.0, 0.0, 1.0, 0.0, Color::DarkGray));
+        ctx.draw(&CanvasLine::new(0.0, -1.0, 0.0, 1.0, Color::DarkGray));
         ctx.print(0.0, 1.0, "N".green());
         ctx.print(1.0, 0.0, "E".green());
         ctx.print(0.0, -1.0, "S".green());
@@ -185,10 +223,55 @@ impl<'a> Skyplot<'a> {
     }
 
     fn draw_svs(ctx: &mut Context, svs: &[PlotableSv]) {
-        ctx.marker(Marker::HalfBlock);
-        for sv in svs.iter() {
-            ctx.draw(sv);
+        for state in [
+            SatelliteState::Visible,
+            SatelliteState::Tracked,
+            SatelliteState::Used,
+        ] {
+            let svs_per_state = svs.iter().filter(|sv| sv.state == state);
+
+            ctx.marker(state.marker());
+
+            for sv in svs_per_state {
+                ctx.draw(sv);
+            }
         }
+    }
+
+    fn render_legend(area: Rect, buf: &mut Buffer) {
+        let states = Line::from(vec![
+            Span::styled("•", Style::new().gray()),
+            Span::raw(" Visible    "),
+            Span::styled("o", Style::new().gray()),
+            Span::raw(" Tracked    "),
+            Span::styled("▄", Style::new().gray()),
+            Span::raw(" Used"),
+        ])
+        .centered();
+
+        let mut gnss_spans = Vec::new();
+
+        for (index, gnss) in [Gnss::Gps, Gnss::Glonass, Gnss::Galileo, Gnss::Beidou]
+            .into_iter()
+            .enumerate()
+        {
+            if index > 0 {
+                gnss_spans.push(Span::raw("    "));
+            }
+
+            gnss_spans.push(Span::styled("■", Style::new().fg(Color::from(gnss))));
+            gnss_spans.push(Span::raw(format!(" {}", gnss.as_code_str())));
+        }
+
+        let constellations = Line::from(gnss_spans).centered();
+
+        Paragraph::new(Text::from(vec![constellations, states]))
+            .block(
+                Block::new()
+                    .border_type(BorderType::LightDoubleDashed)
+                    .borders(Borders::TOP),
+            )
+            .render(area, buf);
     }
 
     fn split_area(area: Rect) -> (Rect, Rect) {
@@ -252,5 +335,57 @@ impl From<Gnss> for Color {
             Gnss::Beidou => Color::Yellow,
             Gnss::Other => Color::Gray,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::gnss::{GnssSignal, GpsSignal};
+
+    fn sv() -> SvData {
+        SvData::new(Gnss::Gps, 2)
+    }
+
+    #[test]
+    fn satellite_state_is_visible_without_tracked_signals() {
+        assert_eq!(SatelliteState::from(&sv()), SatelliteState::Visible);
+    }
+
+    #[test]
+    fn satellite_state_is_tracked_when_no_signal_is_used() {
+        let mut sv = sv();
+        sv.update_signal(GnssSignal::Gps(GpsSignal::L1CA), Some(45.0), Some(false));
+
+        assert_eq!(SatelliteState::from(&sv), SatelliteState::Tracked);
+    }
+
+    #[test]
+    fn satellite_state_is_used_when_any_signal_is_used() {
+        let mut sv = sv();
+        sv.update_signal(GnssSignal::Gps(GpsSignal::L1CA), Some(45.0), Some(false));
+        sv.update_signal(GnssSignal::Gps(GpsSignal::L5I), Some(30.0), Some(true));
+
+        assert_eq!(SatelliteState::from(&sv), SatelliteState::Used);
+    }
+
+    #[test]
+    fn skyplot_satellite_requires_position() {
+        assert!(SkyplotSatellite::try_from(&sv()).is_err());
+    }
+
+    #[test]
+    fn skyplot_satellite_is_built_from_sv_data() {
+        let mut sv = sv();
+        sv.update_geometry(Some(45.0), Some(120.0));
+        sv.update_signal(GnssSignal::Gps(GpsSignal::L1CA), Some(45.0), Some(true));
+
+        let satellite = SkyplotSatellite::try_from(&sv).unwrap();
+
+        assert_eq!(satellite.gnss, Gnss::Gps);
+        assert_eq!(satellite.svid, 2);
+        assert_eq!(satellite.elevation, 45.0);
+        assert_eq!(satellite.azimuth, 120.0);
+        assert_eq!(satellite.state, SatelliteState::Used);
     }
 }

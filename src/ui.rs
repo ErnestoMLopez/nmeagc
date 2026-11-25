@@ -338,12 +338,7 @@ impl<'a> From<&App> for Skyplot<'a> {
         let satellites = app
             .sv_data
             .iter()
-            .filter_map(|sv| match (sv.elevation, sv.azimuth) {
-                (Some(elevation), Some(azimuth)) if !sv.signals().is_empty() => Some(
-                    SkyplotSatellite::new(sv.gnss, sv.svid, elevation as f64, azimuth as f64),
-                ),
-                _ => None,
-            })
+            .filter_map(|sv| SkyplotSatellite::try_from(sv).ok())
             .collect::<Vec<_>>();
 
         Skyplot::new(satellites)

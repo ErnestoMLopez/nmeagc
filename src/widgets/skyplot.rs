@@ -7,6 +7,7 @@ use ratatui::widgets::canvas::{Canvas, Circle, Context, Line as CanvasLine, Pain
 use ratatui::widgets::{
     Block, BlockExt, BorderType, Borders, Cell, Paragraph, Row, Table, Widget, Wrap,
 };
+use strum::{EnumIter, IntoEnumIterator};
 
 use crate::gnss::{Gnss, SvData};
 
@@ -42,7 +43,7 @@ impl TryFrom<&SvData> for SkyplotSatellite {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, EnumIter)]
 enum SatelliteState {
     /// The satellite is in view, but no signal is being tracked.
     Visible,
@@ -58,6 +59,22 @@ impl SatelliteState {
             Self::Visible => Marker::Dot,
             Self::Tracked => Marker::Custom('o'),
             Self::Used => Marker::HalfBlock,
+        }
+    }
+
+    const fn glyph(self) -> &'static str {
+        match self {
+            Self::Visible => "•",
+            Self::Tracked => "o",
+            Self::Used => "▄",
+        }
+    }
+
+    const fn label(self) -> &'static str {
+        match self {
+            Self::Visible => "Visible",
+            Self::Tracked => "Tracked",
+            Self::Used => "Used",
         }
     }
 }
@@ -155,7 +172,7 @@ impl<'a> Widget for Skyplot<'a> {
                 .style(self.style);
             Widget::render(table, info_area, buf);
         } else {
-            Self::render_legend(info_area, buf);
+            self.render_legend(info_area, buf);
         }
     }
 }
@@ -223,11 +240,7 @@ impl<'a> Skyplot<'a> {
     }
 
     fn draw_svs(ctx: &mut Context, svs: &[PlotableSv]) {
-        for state in [
-            SatelliteState::Visible,
-            SatelliteState::Tracked,
-            SatelliteState::Used,
-        ] {
+        for state in SatelliteState::iter() {
             let svs_per_state = svs.iter().filter(|sv| sv.state == state);
 
             ctx.marker(state.marker());
@@ -238,40 +251,36 @@ impl<'a> Skyplot<'a> {
         }
     }
 
-    fn render_legend(area: Rect, buf: &mut Buffer) {
-        let states = Line::from(vec![
-            Span::styled("•", Style::new().gray()),
-            Span::raw(" Visible    "),
-            Span::styled("o", Style::new().gray()),
-            Span::raw(" Tracked    "),
-            Span::styled("▄", Style::new().gray()),
-            Span::raw(" Used"),
-        ])
+    fn render_legend(&self, area: Rect, buf: &mut Buffer) {
+        let states = Line::from_iter(SatelliteState::iter().enumerate().flat_map(
+            |(index, state)| {
+                let separator = (index > 0).then_some(Span::raw("    "));
+                let symbol = Span::styled(state.glyph(), self.style);
+                let label = Span::styled(format!(" {}", state.label()), self.style);
+
+                [separator, Some(symbol), Some(label)].into_iter().flatten()
+            },
+        ))
         .centered();
 
-        let mut gnss_spans = Vec::new();
+        let constellations = Line::from_iter(Gnss::iter().enumerate().flat_map(|(index, gnss)| {
+            let separator = (index > 0).then_some(Span::raw("    "));
+            let symbol = Span::styled("■", self.style.fg(Color::from(gnss)));
+            let label = Span::styled(format!(" {}", gnss.as_code_str()), self.style);
 
-        for (index, gnss) in [Gnss::Gps, Gnss::Glonass, Gnss::Galileo, Gnss::Beidou]
-            .into_iter()
-            .enumerate()
-        {
-            if index > 0 {
-                gnss_spans.push(Span::raw("    "));
-            }
+            [separator, Some(symbol), Some(label)].into_iter().flatten()
+        }))
+        .centered();
 
-            gnss_spans.push(Span::styled("■", Style::new().fg(Color::from(gnss))));
-            gnss_spans.push(Span::raw(format!(" {}", gnss.as_code_str())));
-        }
-
-        let constellations = Line::from(gnss_spans).centered();
-
-        Paragraph::new(Text::from(vec![constellations, states]))
+        let legend = Paragraph::new(Text::from(vec![constellations, states]))
             .block(
                 Block::new()
                     .border_type(BorderType::LightDoubleDashed)
                     .borders(Borders::TOP),
             )
-            .render(area, buf);
+            .style(self.style);
+
+        legend.render(area, buf);
     }
 
     fn split_area(area: Rect) -> (Rect, Rect) {

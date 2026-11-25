@@ -1,7 +1,7 @@
 use chrono::{DateTime, NaiveTime, Utc};
-use strum::IntoStaticStr;
+use strum::{EnumIter, IntoStaticStr};
 
-#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Default, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, EnumIter)]
 pub enum Gnss {
     #[default]
     Gps,
@@ -128,7 +128,7 @@ impl Gnss {
             Gnss::Glonass => "GLO",
             Gnss::Galileo => "GAL",
             Gnss::Beidou => "BDS",
-            Gnss::Other => "---",
+            Gnss::Other => "UNK",
         }
     }
 }

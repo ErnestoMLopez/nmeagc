@@ -163,8 +163,11 @@ pub enum SolutionType {
 
 #[derive(Debug, Clone)]
 pub struct SignalData {
+    /// GNSS signal identifier
     pub signal: GnssSignal,
+    /// Carrier-to-noise density ratio [dB-Hz]
     pub cn0: f32,
+    /// Indicates if the signal is used in the navigation solution
     pub is_used: bool,
 }
 
@@ -210,7 +213,9 @@ impl SvData {
 
     /// Updates a signal observation, adding the signal if it is not tracked yet.
     ///
-    /// Fields that are `None` keep their current value.
+    /// Fields that are `None` keep their current value. A signal can only be added when a C/N0
+    /// is provided, so an update that only carries the used state never creates an untracked
+    /// signal.
     pub fn update_signal(&mut self, signal: GnssSignal, cn0: Option<f32>, is_used: Option<bool>) {
         if let Some(data) = self.signals.iter_mut().find(|data| data.signal == signal) {
             if let Some(cn0) = cn0 {
@@ -219,10 +224,10 @@ impl SvData {
             if let Some(is_used) = is_used {
                 data.is_used = is_used;
             }
-        } else {
+        } else if let Some(cn0) = cn0 {
             let data = SignalData {
                 signal,
-                cn0: cn0.unwrap_or_default(),
+                cn0,
                 is_used: is_used.unwrap_or_default(),
             };
 
@@ -376,5 +381,15 @@ mod tests {
         assert_eq!(sv.signals()[0].signal, GnssSignal::from(Gnss::Glonass));
         assert_eq!(sv.signals()[0].cn0, 25.0);
         assert!(sv.signals()[0].is_used);
+    }
+
+    #[test]
+    fn satellite_signal_without_cn0_does_not_add_it() {
+        let mut sv = SvData::new(Gnss::Gps, 2);
+
+        // A used-state update cannot create a signal without tracking information.
+        sv.update_signal(GnssSignal::Gps(GpsSignal::L1CA), None, Some(true));
+
+        assert!(sv.signals().is_empty());
     }
 }

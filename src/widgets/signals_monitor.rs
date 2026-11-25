@@ -89,8 +89,10 @@ impl<'a> SignalsMonitor<'a> {
         let mut svs: HashMap<(Gnss, u8), bool> = HashMap::new();
 
         self.signals.0.iter().for_each(|signal| {
-            svs.entry((Gnss::from(signal.signal), signal.svid))
-                .or_insert(signal.is_used);
+            let sv_used = svs
+                .entry((Gnss::from(signal.signal), signal.svid))
+                .or_default();
+            *sv_used |= signal.is_used;
         });
 
         let tracked = svs.len();

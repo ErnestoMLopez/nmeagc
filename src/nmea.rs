@@ -206,22 +206,32 @@ impl App {
         // the constellation.
         let signal = GnssSignal::from(gnss);
 
+        // Each GSV entry gives data of a visible satellite, so we add an SvData. It could report
+        // `00` when the signal is visible but not tracked, so a missing or zero SNR leaves the
+        // satellite without a signal entry. It also does not report whether the satellite is used
+        // in the navigation solution, so we preserve the value set by the last GSA.
         let sv_data = gsv_block
             .iter()
             .rev()
             .flat_map(|part| part.sats_info.iter().flatten())
             .map(|satellite| {
                 let svid = satellite.prn() as u8;
-                let is_used = self
-                    .sv_data
-                    .iter()
-                    .find(|sv| sv.gnss == gnss && sv.svid == svid)
-                    .and_then(|sv| sv.signals().iter().find(|data| data.signal == signal))
-                    .is_some_and(|data| data.is_used);
 
                 let mut sv = SvData::new(gnss, svid);
+
                 sv.update_geometry(satellite.elevation(), satellite.azimuth());
-                sv.update_signal(signal, satellite.snr(), Some(is_used));
+
+                if let Some(cn0) = satellite.snr().filter(|cn0| *cn0 > 0.0) {
+                    let is_used = self
+                        .sv_data
+                        .iter()
+                        .find(|sv| sv.gnss == gnss && sv.svid == svid)
+                        .and_then(|sv| sv.signals().iter().find(|data| data.signal == signal))
+                        .is_some_and(|data| data.is_used);
+
+                    sv.update_signal(signal, Some(cn0), Some(is_used));
+                }
+
                 sv
             })
             .collect::<Vec<_>>();
@@ -676,6 +686,10 @@ mod tests {
             .collect::<Vec<_>>();
         assert_eq!(used, [2, 5, 9, 12, 17, 19, 23, 28]);
 
+        // GSA only updates the used flag, so the C/N0 from GSV is preserved.
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.signals()[0].cn0, 45.0);
+
         // A new GSA for the same constellation replaces the previous used set.
         app.update_from_gsa(&gsa("$GPGSA,A,3,02,,,,,,,,,,,,1.5,0.9,1.2*3E"));
 
@@ -713,6 +727,51 @@ mod tests {
 
         let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
         assert_eq!(sv.signals()[0].cn0, 45.0);
+    }
+
+    #[test]
+    fn gsv_cycle_without_snr_drops_the_signal() {
+        let mut app = app();
+
+        app.update_from_gsv(&gsv("$GPGSV,1,1,01,02,45,120,45*49"));
+        app.update_from_gsa(&gsa("$GPGSA,A,3,02,,,,,,,,,,,,1.5,0.9,1.2*3E"));
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.signals()[0].cn0, 45.0);
+        assert!(sv.signals()[0].is_used);
+
+        // The satellite is still visible, but the receiver no longer reports a C/N0.
+        app.update_from_gsv(&gsv("$GPGSV,1,1,01,02,45,120,*48"));
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.elevation, Some(45.0));
+        assert_eq!(sv.azimuth, Some(120.0));
+        assert!(sv.signals().is_empty());
+
+        // GSA cannot add a signal while it is not tracking.
+        app.update_from_gsa(&gsa("$GPGSA,A,3,02,,,,,,,,,,,,1.5,0.9,1.2*3E"));
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert!(sv.signals().is_empty());
+    }
+
+    #[test]
+    fn gsv_zero_snr_drops_the_signal() {
+        let mut app = app();
+
+        app.update_from_gsv(&gsv("$GPGSV,1,1,01,02,45,120,45*49"));
+        app.update_from_gsa(&gsa("$GPGSA,A,3,02,,,,,,,,,,,,1.5,0.9,1.2*3E"));
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.signals()[0].cn0, 45.0);
+        assert!(sv.signals()[0].is_used);
+
+        // A zero SNR is NMEA's way of reporting a visible but untracked signal.
+        app.update_from_gsv(&gsv("$GPGSV,1,1,01,02,45,120,00*48"));
+
+        let sv = app.sv_data.iter().find(|sv| sv.svid == 2).unwrap();
+        assert_eq!(sv.elevation, Some(45.0));
+        assert!(sv.signals().is_empty());
     }
 
     #[test]
